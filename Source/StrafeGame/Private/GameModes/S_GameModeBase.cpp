@@ -26,6 +26,11 @@ void AS_GameModeBase::InitGame(const FString& MapName, const FString& Options, F
     // UE_LOG(LogTemp, Log, TEXT("AS_GameModeBase::InitGame - Map: %s, Options: %s"), *MapName, *Options);
 }
 
+bool AS_GameModeBase::PlayerCanRestart(APlayerController* Player)
+{
+    return false;
+}
+
 void AS_GameModeBase::InitGameState()
 {
     Super::InitGameState();
