@@ -1,0 +1,258 @@
+StrafeGame
+├── Config
+│   ├── DefaultEditor.ini
+│   ├── DefaultEngine.ini
+│   ├── DefaultGame.ini
+│   └── DefaultInput.ini
+│
+├── Content
+│   ├── Collections
+│   ├── Core
+│   │   └── Input
+│   │       ├── IMC_Default.uasset
+│   │       └── Actions
+│   │           ├── Player
+│   │           │   ├── IA_Jump.uasset
+│   │           │   ├── IA_Look.uasset
+│   │           │   ├── IA_Move.uasset
+│   │           │   ├── IA_NextWeapon.uasset
+│   │           │   ├── IA_PreviousWeapon.uasset
+│   │           │   ├── IA_Weapon_PrimaryAbility.uasset
+│   │           │   └── IA_Weapon_SecondaryAbility.uasset
+│   │           └── UI
+│   │               ├── IA_ToggleConsole.uasset
+│   │               ├── IA_ToggleMenu.uasset
+│   │               └── IA_ToggleScoreboard.uasset
+│   ├── Developers
+│   │   └── phili
+│   │       └── Collections
+│   ├── GameModes
+│   │   ├── Arena
+│   │   │   └── BP_S_ArenaGameMode.uasset
+│   │   └── Strafe
+│   │       ├── BP_S_StrafeGameMode.uasset
+│   │       ├── BP_S_StrafeManager.uasset
+│   │       ├── BP_S_StrafePlayerState.uasset
+│   │       └── Actors
+│   │           └── Checkpoints
+│   │               ├── BP_S_Checkpoint_Finish.uasset
+│   │               ├── BP_S_Checkpoint_Intermediate.uasset
+│   │               └── BP_S_Checkpoint_Start.uasset
+│   ├── GAS
+│   │   ├── Abilities
+│   │   │   └── Weapons
+│   │   │       ├── BP_S_WeaponEquipAbility.uasset
+│   │   │       ├── BP_S_WeaponPrimaryAbility.uasset
+│   │   │       ├── BP_S_WeaponSecondaryAbility.uasset
+│   │   │       ├── ChargedShotgun
+│   │   │       │   ├── BP_S_ChargedShotgun_PrimaryAbility.uasset
+│   │   │       │   └── BP_S_ChargedShotgun_SecondaryAbility.uasset
+│   │   │       ├── RocketLauncher
+│   │   │       │   ├── BP_S_RocketLauncher_PrimaryAbility.uasset
+│   │   │       │   └── BP_S_RocketLauncher_SecondaryAbility.uasset
+│   │   │       └── StickyGrenadeLauncher
+│   │   │           ├── BP_S_StickyLauncher_PrimaryAbility.uasset
+│   │   │           └── BP_S_StickyLauncher_SecondaryAbility.uasset
+│   │   ├── Attributes
+│   │   │   └── BP_S_Attributes_DefaultCharacter.uasset
+│   │   └── Effects
+│   │       └── Weapons
+│   │           ├── ChargedShotgun
+│   │           │   ├── BP_S_Charge_ChargedShotgun_PrimaryAbility.uasset
+│   │           │   ├── BP_S_Charge_ChargedShotgun_SecondaryAbility.uasset
+│   │           │   ├── BP_S_Cooldown_ChargedShotgun_Lockout.uasset
+│   │           │   ├── BP_S_Cost_ChargedShotgun_PrimaryAbility.uasset
+│   │           │   └── BP_S_Cost_ChargedShotgun_SecondaryAbility.uasset
+│   │           ├── RocketLauncher
+│   │           │   ├── BP_S_Cooldown_RocketLauncher_PrimaryAbility.uasset
+│   │           │   └── BP_S_Cost_RocketLauncher_PrimaryAbility.uasset
+│   │           └── StickyGrenadeLauncher
+│   │               ├── BP_S_Cooldown_StickyGrenadeLauncher_PrimaryAbility.uasset
+│   │               └── BP_S_Cost_StickyGrenadeLauncher_PrimaryAbility.uasset
+│   ├── Items
+│   │   └── Pickups
+│   │       ├── BP_S_AmmoPickup.uasset
+│   │       ├── BP_S_PowerupPickup.uasset
+│   │       └── BP_S_WeaponPickup.uasset
+│   ├── Maps
+│   ├── Player
+│   │   ├── BP_S_Character.uasset
+│   │   ├── BP_S_PlayerController.uasset
+│   │   └── BP_S_PlayerState.uasset
+│   ├── UI
+│   │   ├── HUD
+│   │   │   └── GameModes
+│   │   │       ├── Arena
+│   │   │       └── Strafe
+│   │   └── Widgets
+│   └── Weapons
+│       ├── ChargedShotgun
+│       │   ├── BP_S_ChargedShotgun.uasset
+│       │   ├── DA_S_ChargedShotgun.uasset
+│       │   ├── Audio
+│       │   ├── FX
+│       │   ├── Materials
+│       │   └── Meshes
+│       ├── RocketLauncher
+│       │   ├── BP_S_RocketLauncher.uasset
+│       │   ├── BP_S_RocketProjectile.uasset
+│       │   ├── DA_S_RocketLauncher.uasset
+│       │   ├── Audio
+│       │   ├── FX
+│       │   ├── Materials
+│       │   └── Meshes
+│       └── StickyGrenadeLauncher
+│           ├── BP_S_StickyGrenadeLauncher.uasset
+│           ├── BP_S_StickyGrenadeProjectile.uasset
+│           ├── DA_S_StickyGrenadeLauncher.uasset
+│           ├── Audio
+│           ├── FX
+│           ├── Materials
+│           └── Meshes
+│
+└── Source
+    ├── StrafeGame.Target.cs
+    ├── StrafeGameEditor.Target.cs
+    └── StrafeGame
+        ├── StrafeGame.Build.cs
+        ├── StrafeGame.cpp
+        ├── StrafeGame.h
+        ├── Private
+        │   ├── Abilities
+        │   │   └── Weapons
+        │   │       ├── S_WeaponEquipAbility.cpp
+        │   │       ├── S_WeaponPrimaryAbility.cpp
+        │   │       ├── S_WeaponSecondaryAbility.cpp
+        │   │       ├── ChargedShotgun
+        │   │       │   ├── S_ChargedShotgunPrimaryAbility.cpp
+        │   │       │   └── S_ChargedShotgunSecondaryAbility.cpp
+        │   │       ├── RocketLauncher
+        │   │       │   ├── S_RocketLauncherPrimaryAbility.cpp
+        │   │       │   └── S_RocketLauncherSecondaryAbility.cpp
+        │   │       └── StickyGrenadeLauncher
+        │   │           ├── S_StickyLauncherPrimaryAbility.cpp
+        │   │           └── S_StickyLauncherSecondaryAbility.cpp
+        │   ├── Core
+        │   │   ├── S_Actor.cpp
+        │   │   ├── S_ActorComponent.cpp
+        │   │   └── S_GameInstance.cpp
+        │   ├── GameModes
+        │   │   ├── S_GameModeBase.cpp
+        │   │   ├── S_GameStateBase.cpp
+        │   │   ├── Arena
+        │   │   │   ├── S_ArenaGameMode.cpp
+        │   │   │   └── S_ArenaGameState.cpp
+        │   │   └── Strafe
+        │   │       ├── S_StrafeGameMode.cpp
+        │   │       ├── S_StrafeGameState.cpp
+        │   │       ├── S_StrafeManager.cpp
+        │   │       └── Actors
+        │   │           └── S_CheckpointTrigger.cpp
+        │   ├── Items
+        │   │   └── Pickups
+        │   │       ├── S_AmmoPickup.cpp
+        │   │       ├── S_Pickup.cpp
+        │   │       ├── S_PowerupPickup.cpp
+        │   │       └── S_WeaponPickup.cpp
+        │   ├── Player
+        │   │   ├── S_Character.cpp
+        │   │   ├── S_PlayerController.cpp
+        │   │   ├── S_PlayerState.cpp
+        │   │   ├── Attributes
+        │   │   │   └── S_AttributeSet.cpp
+        │   │   └── Components
+        │   │       ├── S_CharacterMovementComponent.cpp
+        │   │       ├── S_WeaponInventoryComponent.cpp
+        │   │       └── GameModes
+        │   │           └── Strafe
+        │   │               └── S_StrafeStateComponent.cpp
+        │   ├── UI
+        │   │   ├── S_HUD.cpp
+        │   │   ├── Arena
+        │   │   │   └── S_ArenaHUD.cpp
+        │   │   └── Strafe
+        │   │       └── S_StrafeHUD.cpp
+        │   └── Weapons
+        │       ├── S_HitscanWeapon.cpp
+        │       ├── S_Projectile.cpp
+        │       ├── S_ProjectileWeapon.cpp
+        │       ├── S_Weapon.cpp
+        │       ├── S_WeaponDataAsset.cpp
+        │       ├── ChargedShotgun
+        │       │   └── S_ChargedShotgun.cpp
+        │       ├── RocketLauncher
+        │       │   ├── S_RocketLauncher.cpp
+        │       │   └── S_RocketProjectile.cpp
+        │       └── StickyGrenadeLauncher
+        │           ├── S_StickyGrenadeLauncher.cpp
+        │           └── S_StickyGrenadeProjectile.cpp
+        └── Public
+            ├── Abilities
+            │   └── Weapons
+            │       ├── S_WeaponEquipAbility.h
+            │       ├── S_WeaponPrimaryAbility.h
+            │       ├── S_WeaponSecondaryAbility.h
+            │       ├── ChargedShotgun
+            │       │   ├── S_ChargedShotgunPrimaryAbility.h
+            │       │   └── S_ChargedShotgunSecondaryAbility.h
+            │       ├── RocketLauncher
+            │       │   ├── S_RocketLauncherPrimaryAbility.h
+            │       │   └── S_RocketLauncherSecondaryAbility.h
+            │       └── StickyGrenadeLauncher
+            │           ├── S_StickyLauncherPrimaryAbility.h
+            │           └── S_StickyLauncherSecondaryAbility.h
+            ├── Core
+            │   ├── S_Actor.h
+            │   ├── S_ActorComponent.h
+            │   └── S_GameInstance.h
+            ├── GameModes
+            │   ├── S_GameModeBase.h
+            │   ├── S_GameStateBase.h
+            │   ├── Arena
+            │   │   ├── S_ArenaGameMode.h
+            │   │   └── S_ArenaGameState.h
+            │   └── Strafe
+            │       ├── S_StrafeGameMode.h
+            │       ├── S_StrafeGameState.h
+            │       ├── S_StrafeManager.h
+            │       └── Actors
+            │           └── S_CheckpointTrigger.h
+            ├── Items
+            │   └── Pickups
+            │       ├── S_AmmoPickup.h
+            │       ├── S_Pickup.h
+            │       ├── S_PowerupPickup.h
+            │       └── S_WeaponPickup.h
+            ├── Player
+            │   ├── S_Character.h
+            │   ├── S_PlayerController.h
+            │   ├── S_PlayerState.h
+            │   ├── Attributes
+            │   │   └── S_AttributeSet.h
+            │   └── Components
+            │       ├── S_CharacterMovementComponent.h
+            │       ├── S_WeaponInventoryComponent.h
+            │       └── GameModes
+            │           ├── Arena
+            │           └── Strafe
+            │               └── S_StrafeStateComponent.h
+            ├── UI
+            │   ├── S_HUD.h
+            │   ├── Arena
+            │   │   └── S_ArenaHUD.h
+            │   └── Strafe
+            │       └── S_StrafeHUD.h
+            └── Weapons
+                ├── S_HitscanWeapon.h
+                ├── S_Projectile.h
+                ├── S_ProjectileWeapon.h
+                ├── S_Weapon.h
+                ├── S_WeaponDataAsset.h
+                ├── ChargedShotgun
+                │   └── S_ChargedShotgun.h
+                ├── RocketLauncher
+                │   ├── S_RocketLauncher.h
+                │   └── S_RocketProjectile.h
+                └── StickyGrenadeLauncher
+                    ├── S_StickyGrenadeLauncher.h
+                    └── S_StickyGrenadeProjectile.h
