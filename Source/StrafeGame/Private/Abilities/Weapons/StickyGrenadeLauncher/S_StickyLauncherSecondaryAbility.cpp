@@ -33,7 +33,7 @@ bool US_StickyGrenadeLauncherSecondaryAbility::CanActivateAbility(const FGamepla
     for (const AS_Projectile* Proj : Launcher->GetActiveProjectiles())
     {
         // Check if it's a sticky grenade and not pending kill
-        if (Proj && Cast<AS_StickyGrenadeProjectile>(Proj) && !Proj->IsPendingKill()) // IsPendingKill is AActor method
+        if (Proj && Cast<AS_StickyGrenadeProjectile>(Proj) && !Proj->IsPendingKillPending()) // IsPendingKill is AActor method
         {
             bHasActiveStickies = true;
             break;

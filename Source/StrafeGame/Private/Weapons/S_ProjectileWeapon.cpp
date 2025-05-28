@@ -11,11 +11,8 @@ AS_ProjectileWeapon::AS_ProjectileWeapon()
     // DefaultProjectileClass = nullptr; // To be set in derived BPs or read from DataAsset by GA
 }
 
-void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClassFromAbility) // MODIFIED
+void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClassFromAbility)
 {
-    // Pass EventData along if Super uses it.
-    // Super::ExecuteFire_Implementation(FireStartLocation, FireDirection, EventData, HitscanSpread, HitscanRange, ProjectileClassFromAbility); // MODIFIED
-
     if (!HasAuthority())
     {
         return;
@@ -34,12 +31,12 @@ void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLoc
         return;
     }
 
-    const US_ProjectileWeaponDataAsset* ProjWeaponData = Cast<US_ProjectileWeaponDataAsset>(GetWeaponData());
+    const US_ProjectileWeaponDataAsset* ProjWeaponDataAssetFromWeapon = Cast<US_ProjectileWeaponDataAsset>(GetWeaponData()); // Correctly cast here too
     TSubclassOf<AS_Projectile> ActualProjectileClass = ProjectileClassFromAbility;
 
-    if (!ActualProjectileClass && ProjWeaponData) // Fallback to DA if ability didn't provide (shouldn't happen with new design)
+    if (!ActualProjectileClass && ProjWeaponDataAssetFromWeapon)
     {
-        ActualProjectileClass = ProjWeaponData->ProjectileClass;
+        ActualProjectileClass = ProjWeaponDataAssetFromWeapon->ProjectileClass;
     }
 
     if (!ActualProjectileClass)
@@ -49,31 +46,8 @@ void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLoc
     }
 
     FTransform SpawnTransform(FireDirection.Rotation(), FireStartLocation);
-    // Use ProjWeaponData for LaunchSpeed and ProjectileLifeSpan when initializing the projectile
     AS_Projectile* SpawnedProjectile = SpawnProjectile(ActualProjectileClass, SpawnTransform.GetLocation(), SpawnTransform.GetRotation().Rotator(), OwnerCharacter, InstigatorController);
 
-    if (SpawnedProjectile)
-    {
-        // Initialization like speed, lifespan should happen in InitializeProjectile or be part of the projectile's defaults
-        // based on data from its DataAsset or the weapon's DataAsset.
-        // For example, the GameplayAbility would read these from the WeaponDataAsset and pass them somehow if they were dynamic per shot.
-        // Or Projectile itself reads from its own DA or defaults.
-        if (ProjWeaponData)
-        {
-            SpawnedProjectile->InitializeProjectile(OwnerCharacter, this, ProjWeaponData); // Pass weapon data
-            if (ProjWeaponData->LaunchSpeed > 0.f && SpawnedProjectile->ProjectileMovementComponent) { // Access directly
-                SpawnedProjectile->ProjectileMovementComponent->InitialSpeed = ProjWeaponData->LaunchSpeed; // Access directly
-                SpawnedProjectile->ProjectileMovementComponent->MaxSpeed = ProjWeaponData->LaunchSpeed;     // Access directly
-            }
-            if (ProjWeaponData->ProjectileLifeSpan > 0.f) {
-                SpawnedProjectile->SetLifeSpan(ProjWeaponData->ProjectileLifeSpan);
-            }
-        }
-        else {
-            SpawnedProjectile->InitializeProjectile(OwnerCharacter, this, GetWeaponData());
-        }
-    }
-    // Muzzle flash cue should be triggered by the GameplayAbility
 }
 
 AS_Projectile* AS_ProjectileWeapon::SpawnProjectile(TSubclassOf<AS_Projectile> ProjectileClass, const FVector& SpawnLocation, const FRotator& SpawnRotation, AS_Character* InstigatorCharacter, AController* InstigatorController)
@@ -85,20 +59,33 @@ AS_Projectile* AS_ProjectileWeapon::SpawnProjectile(TSubclassOf<AS_Projectile> P
     }
 
     FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = this; // The weapon is the direct owner of the projectile
-    SpawnParams.Instigator = InstigatorCharacter; // The character is the instigator of the damage/effects
+    SpawnParams.Owner = this;
+    SpawnParams.Instigator = InstigatorCharacter;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-    //SpawnParams.bDeferConstruction = true; // If you need to set properties before BeginPlay/Construction
+
 
     AS_Projectile* Projectile = World->SpawnActor<AS_Projectile>(ProjectileClass, SpawnLocation, SpawnRotation, SpawnParams);
     if (Projectile)
     {
-        // Projectile->SetProjectileWeapon(this); // Let projectile know its weapon
-        // Projectile->SetInstigatorController(InstigatorController);
-        // Projectile->SetInstigatorCharacter(InstigatorCharacter);
-        // Projectile->FinishSpawning(FTransform(SpawnRotation, SpawnLocation)); // If bDeferConstruction was true
+        // Get the correct data asset type
+        const US_ProjectileWeaponDataAsset* ProjWeaponData = Cast<US_ProjectileWeaponDataAsset>(GetWeaponData());
+        Projectile->InitializeProjectile(OwnerCharacter, this, ProjWeaponData); // Pass the casted data asset
 
-        RegisterProjectile(Projectile); // Track it if needed
+        if (ProjWeaponData) // Check if cast was successful
+        {
+            if (ProjWeaponData->LaunchSpeed > 0.f && Projectile->ProjectileMovementComponent) {
+                Projectile->ProjectileMovementComponent->InitialSpeed = ProjWeaponData->LaunchSpeed;
+                Projectile->ProjectileMovementComponent->MaxSpeed = ProjWeaponData->LaunchSpeed;
+            }
+            if (ProjWeaponData->ProjectileLifeSpan > 0.f) {
+                Projectile->SetLifeSpan(ProjWeaponData->ProjectileLifeSpan);
+            }
+        }
+        // Else: if ProjWeaponData is null, InitializeProjectile will receive nullptr for the data asset,
+        // which it should handle gracefully (e.g., by using projectile's internal defaults).
+        // Or, you could log a warning if the cast fails and the data asset is expected.
+
+        RegisterProjectile(Projectile);
     }
     return Projectile;
 }

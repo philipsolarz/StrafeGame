@@ -23,7 +23,7 @@ bool AS_RocketLauncher::DetonateOldestActiveRocket()
 
         for (AS_Projectile* Proj : ActiveProjectiles)
         {
-            if (Proj && !Proj->IsPendingKill()) // Ensure it's valid and hasn't already been told to detonate
+            if (Proj && !Proj->IsPendingKillPending()) // Ensure it's valid and hasn't already been told to detonate
             {
                 // Need a way to get spawn time or an incrementing ID if direct time isn't reliable
                 // For simplicity, let's assume TArray maintains insertion order, so index 0 is oldest.

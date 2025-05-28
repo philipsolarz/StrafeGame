@@ -1,4 +1,5 @@
 #include "Player/S_Character.h"
+#include "InputMappingContext.h"
 #include "Player/S_PlayerState.h" // Include S_PlayerState
 #include "Player/Components/S_WeaponInventoryComponent.h"
 #include "Player/Components/S_CharacterMovementComponent.h" // Your custom CMC

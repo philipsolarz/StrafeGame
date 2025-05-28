@@ -19,7 +19,7 @@ bool AS_StickyGrenadeLauncher::DetonateOldestActiveSticky()
         // ActiveProjectiles are added to the end, so index 0 is oldest.
         for (AS_Projectile* Proj : ActiveProjectiles)
         {
-            if (Proj && !Proj->IsPendingKill())
+            if (Proj && !Proj->IsPendingKillPending())
             {
                 OldestSticky = Cast<AS_StickyGrenadeProjectile>(Proj);
                 if (OldestSticky) break; // Found the first valid sticky

@@ -31,7 +31,7 @@ bool US_RocketLauncherSecondaryAbility::CanActivateAbility(const FGameplayAbilit
     bool bHasActiveRockets = false;
     for (const AS_Projectile* Proj : Launcher->GetActiveProjectiles())
     {
-        if (Proj && !Proj->IsPendingKill()) // IsPendingKill is AActor method
+        if (Proj && !Proj->IsPendingKillPending()) // IsPendingKill is AActor method
         {
             bHasActiveRockets = true;
             break;
