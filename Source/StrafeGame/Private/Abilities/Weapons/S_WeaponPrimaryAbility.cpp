@@ -77,10 +77,10 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
     AS_Weapon* Weapon = GetEquippedWeapon();
     const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
 
-    FVector FireDirection; // Declaration added
+    FVector FireDirection;
     FVector FireStartLocation;
     FRotator CamRot;
-    FVector CamAimDir; // Keep CamAimDir as it's used for camera's direct forward vector
+    FVector CamAimDir;
 
     if (!Character || !Weapon || !WeaponData)
     {
@@ -94,7 +94,7 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
         FVector CamLoc;
         Controller->GetPlayerViewPoint(CamLoc, CamRot);
-        CamAimDir = CamRot.Vector(); // Camera's aim direction
+        CamAimDir = CamRot.Vector();
 
         const float MaxTraceDist = WeaponData->MaxAimTraceRange > 0.f ? WeaponData->MaxAimTraceRange : 100000.0f;
         FVector CamTraceEnd = CamLoc + CamAimDir * MaxTraceDist;
@@ -143,7 +143,7 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
             ProjClass = ProjData->ProjectileClass;
         }
 
-        const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // Corrected
+        const FGameplayEventData* AbilityTriggerData = CurrentEventData;
         Weapon->ExecuteFire(
             FireStartLocation,
             FireDirection,
@@ -160,16 +160,14 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
     {
         FGameplayCueParameters CueParams;
         CueParams.Location = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
-        CueParams.Normal = FireDirection; // Corrected usage
+        CueParams.Normal = FireDirection;
         CueParams.Instigator = Character;
         CueParams.EffectCauser = Weapon;
         ASC->ExecuteGameplayCue(WeaponData->MuzzleFlashCueTag, CueParams);
     }
 
-    if (!FireMontageTask)
-    {
-        // EndAbility(Handle, ActorInfo, ActivationInfo, false, false); // Already handled
-    }
+    // If FireMontageTask was not created, EndAbility was already called.
+    // If it was created, it will end the ability in its callbacks.
 }
 
 void US_WeaponPrimaryAbility::ApplyAmmoCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)

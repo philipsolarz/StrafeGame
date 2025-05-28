@@ -73,3 +73,10 @@ FGameplayAbilityActorInfo US_WeaponAbility::GetActorInfoForBlueprint() const
     }
     return FGameplayAbilityActorInfo(); // Return default-constructed if null
 }
+
+void US_WeaponAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
+{
+    CurrentEventData = TriggerEventData; // Store it early
+    Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+    // Derived classes will then call CommitAbility and their main logic.
+}

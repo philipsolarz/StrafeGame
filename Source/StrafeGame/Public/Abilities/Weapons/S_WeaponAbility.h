@@ -57,4 +57,8 @@ protected:
 
     UFUNCTION(BlueprintPure, Category = "WeaponAbility|Context") // MODIFIED
         FGameplayAbilityActorInfo GetActorInfoForBlueprint() const; // MODIFIED from GetAbilityActorInfo to avoid clash and make intent clear
+
+    void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData);
+
+    const FGameplayEventData* CurrentEventData;
 };

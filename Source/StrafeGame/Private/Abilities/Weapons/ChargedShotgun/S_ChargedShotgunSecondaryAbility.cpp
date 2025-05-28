@@ -1,4 +1,5 @@
 #include "Abilities/Weapons/ChargedShotgun/S_ChargedShotgunSecondaryAbility.h"
+#include "Abilities/GameplayAbility.h"
 #include "Weapons/ChargedShotgun/S_ChargedShotgun.h"
 #include "Weapons/ChargedShotgun/S_ChargedShotgunDataAsset.h" 
 #include "Player/S_Character.h"
@@ -202,7 +203,7 @@ void US_ChargedShotgunSecondaryAbility::AttemptFireOverchargedShot()
         FireDirection = Weapon->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // CORRECTED
+    const FGameplayEventData* AbilityTriggerData = CurrentEventData; // CORRECTED
     Weapon->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), WeaponData->SecondaryFireSpreadAngle, WeaponData->SecondaryFireHitscanRange, nullptr);
 
     if (WeaponData->SecondaryOverchargedFireCue.IsValid()) ASC->ExecuteGameplayCue(WeaponData->SecondaryOverchargedFireCue, ASC->MakeEffectContext());

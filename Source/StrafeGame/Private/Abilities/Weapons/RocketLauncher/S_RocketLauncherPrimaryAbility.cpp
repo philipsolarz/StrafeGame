@@ -90,7 +90,7 @@ void US_RocketLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySp
         FireDirection = RocketLauncher->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // CORRECTED
+    const FGameplayEventData* AbilityTriggerData = CurrentEventData; // CORRECTED
     RocketLauncher->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), 0.f, 0.f, RocketLauncherData->ProjectileClass);
 
     UAbilityTask_PlayMontageAndWait* MontageTask = PlayWeaponMontage(RocketLauncherData->FireMontage);
