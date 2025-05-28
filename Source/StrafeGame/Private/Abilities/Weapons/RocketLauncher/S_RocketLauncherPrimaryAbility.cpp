@@ -8,6 +8,7 @@
 #include "Kismet/GameplayStatics.h" 
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "GameplayEffectTypes.h" 
+#include "Abilities/GameplayAbility.h"
 
 US_RocketLauncherPrimaryAbility::US_RocketLauncherPrimaryAbility()
 {
@@ -89,7 +90,7 @@ void US_RocketLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySp
         FireDirection = RocketLauncher->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED
+    const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // CORRECTED
     RocketLauncher->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), 0.f, 0.f, RocketLauncherData->ProjectileClass);
 
     UAbilityTask_PlayMontageAndWait* MontageTask = PlayWeaponMontage(RocketLauncherData->FireMontage);

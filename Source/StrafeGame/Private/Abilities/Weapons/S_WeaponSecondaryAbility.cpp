@@ -12,7 +12,10 @@ US_WeaponSecondaryAbility::US_WeaponSecondaryAbility()
 {
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
     AbilityInputID = 1;
-    AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.SecondaryFire"))); // CORRECTED
+    //AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.SecondaryFire"))); // CORRECTED
+    FGameplayTagContainer TempTags;
+    TempTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.SecondaryFire")));
+    SetAssetTags(TempTags);
 }
 
 bool US_WeaponSecondaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, OUT FGameplayTagContainer* OptionalRelevantTags) const

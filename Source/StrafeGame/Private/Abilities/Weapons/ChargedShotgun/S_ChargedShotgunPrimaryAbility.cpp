@@ -8,6 +8,7 @@
 #include "GameplayTagContainer.h"
 #include "GameFramework/Controller.h"
 #include "GameplayEffectTypes.h" 
+#include "Abilities/GameplayAbility.h"
 
 US_ChargedShotgunPrimaryAbility::US_ChargedShotgunPrimaryAbility()
 {
@@ -135,7 +136,7 @@ void US_ChargedShotgunPrimaryAbility::OnChargeComplete()
         return;
     }
 
-    if (WaitInputReleaseTask && WaitInputReleaseTask->IsActive() && IsInputPressed()) // CORRECTED: IsInputPressed()
+    if (WaitInputReleaseTask && WaitInputReleaseTask->IsActive() && IsInputPressed())
     {
         if (CanActivateAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), nullptr, nullptr, nullptr))
         {

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameModes/S_GameModeBase.h"
+#include "GameFramework/PlayerController.h"
 #include "S_StrafeGameMode.generated.h"
 
 class AS_StrafeManager;       // Manages checkpoints and race logic

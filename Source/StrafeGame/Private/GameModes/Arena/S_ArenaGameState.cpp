@@ -6,6 +6,7 @@ AS_ArenaGameState::AS_ArenaGameState()
 {
     FragLimit = 0; // Default, will be set by GameMode
     MatchStateNameOverride = NAME_None;
+    MatchDurationSeconds = 0;
     // CurrentLeaderPlayerState = nullptr;
 }
 
@@ -14,6 +15,7 @@ void AS_ArenaGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Ou
     Super::GetLifetimeReplicatedProps(OutLifetimeProps); // Replicates RemainingTime from base
     DOREPLIFETIME(AS_ArenaGameState, FragLimit);
     DOREPLIFETIME(AS_ArenaGameState, MatchStateNameOverride);
+    DOREPLIFETIME(AS_ArenaGameState, MatchDurationSeconds);
     // DOREPLIFETIME(AS_ArenaGameState, CurrentLeaderPlayerState);
 }
 

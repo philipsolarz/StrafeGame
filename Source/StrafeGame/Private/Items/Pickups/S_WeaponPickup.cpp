@@ -2,7 +2,7 @@
 #include "Player/S_Character.h"
 #include "Player/Components/S_WeaponInventoryComponent.h" // For adding weapon/ammo
 #include "Weapons/S_Weapon.h"                             // For AS_Weapon class
-#include "Weapons/DataAssets/S_WeaponDataAsset.h"         // For accessing InitialAmmoEffect
+#include "Weapons/S_WeaponDataAsset.h"         // For accessing InitialAmmoEffect
 
 AS_WeaponPickup::AS_WeaponPickup()
 {

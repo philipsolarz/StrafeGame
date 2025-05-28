@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameModes/S_GameModeBase.h" // Inherit from our base GameMode
+#include "GameFramework/PlayerController.h"
 #include "S_ArenaGameMode.generated.h"
 
 class AS_PlayerState;       // Forward declare base PlayerState

@@ -61,9 +61,9 @@ void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLoc
         if (ProjWeaponData)
         {
             SpawnedProjectile->InitializeProjectile(OwnerCharacter, this, ProjWeaponData); // Pass weapon data
-            if (ProjWeaponData->LaunchSpeed > 0.f && SpawnedProjectile->GetProjectileMovementComponent()) {
-                SpawnedProjectile->GetProjectileMovementComponent()->InitialSpeed = ProjWeaponData->LaunchSpeed;
-                SpawnedProjectile->GetProjectileMovementComponent()->MaxSpeed = ProjWeaponData->LaunchSpeed;
+            if (ProjWeaponData->LaunchSpeed > 0.f && SpawnedProjectile->ProjectileMovementComponent) { // Access directly
+                SpawnedProjectile->ProjectileMovementComponent->InitialSpeed = ProjWeaponData->LaunchSpeed; // Access directly
+                SpawnedProjectile->ProjectileMovementComponent->MaxSpeed = ProjWeaponData->LaunchSpeed;     // Access directly
             }
             if (ProjWeaponData->ProjectileLifeSpan > 0.f) {
                 SpawnedProjectile->SetLifeSpan(ProjWeaponData->ProjectileLifeSpan);

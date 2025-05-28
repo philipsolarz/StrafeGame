@@ -19,11 +19,17 @@ void AS_StrafePlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-    DOREPLIFETIME_CONDITION(AS_StrafePlayerState, CurrentRaceTime, COND_None, REPNOTIFY_Always); // COND_None as clients need this for UI
-    DOREPLIFETIME_CONDITION(AS_StrafePlayerState, CurrentSplitTimes, COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION(AS_StrafePlayerState, BestRaceTime, COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION(AS_StrafePlayerState, LastCheckpointReached, COND_None, REPNOTIFY_Always);
-    DOREPLIFETIME_CONDITION(AS_StrafePlayerState, bIsRaceActiveForPlayer, COND_None, REPNOTIFY_Always);
+    //DOREPLIFETIME_CONDITION(AS_StrafePlayerState, CurrentRaceTime, COND_None, REPNOTIFY_Always); // COND_None as clients need this for UI
+    //DOREPLIFETIME_CONDITION(AS_StrafePlayerState, CurrentSplitTimes, COND_None, REPNOTIFY_Always);
+    //DOREPLIFETIME_CONDITION(AS_StrafePlayerState, BestRaceTime, COND_None, REPNOTIFY_Always);
+    //DOREPLIFETIME_CONDITION(AS_StrafePlayerState, LastCheckpointReached, COND_None, REPNOTIFY_Always);
+    //DOREPLIFETIME_CONDITION(AS_StrafePlayerState, bIsRaceActiveForPlayer, COND_None, REPNOTIFY_Always);
+
+    DOREPLIFETIME_CONDITION_NOTIFY(AS_StrafePlayerState, CurrentRaceTime, COND_None, REPNOTIFY_Always); // COND_None as clients need this for UI
+    DOREPLIFETIME_CONDITION_NOTIFY(AS_StrafePlayerState, CurrentSplitTimes, COND_None, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(AS_StrafePlayerState, BestRaceTime, COND_None, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(AS_StrafePlayerState, LastCheckpointReached, COND_None, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(AS_StrafePlayerState, bIsRaceActiveForPlayer, COND_None, REPNOTIFY_Always);
 }
 
 void AS_StrafePlayerState::Tick(float DeltaSeconds)
@@ -85,7 +91,7 @@ void AS_StrafePlayerState::ServerStartRace()
 {
     if (HasAuthority())
     {
-        UE_LOG(LogTemp, Log, TEXT("AS_StrafePlayerState for %s: ServerStartRace called."), *GetPlayerNameOrSpectator());
+        UE_LOG(LogTemp, Log, TEXT("AS_StrafePlayerState for %s: ServerStartRace called."), *GetPlayerName());
         CurrentRaceTime = 0.0f;
         CurrentSplitTimes.Empty();
         LastCheckpointReached = -1;
@@ -111,7 +117,7 @@ void AS_StrafePlayerState::ServerReachedCheckpoint(int32 CheckpointIndex, int32 
             LastCheckpointReached = CheckpointIndex;
             CurrentSplitTimes.Add(CurrentRaceTime);
             UE_LOG(LogTemp, Log, TEXT("AS_StrafePlayerState for %s: Reached checkpoint %d at time %f. Total Splits: %d"),
-                *GetPlayerNameOrSpectator(), CheckpointIndex, CurrentRaceTime, CurrentSplitTimes.Num());
+                *GetPlayerName(), CheckpointIndex, CurrentRaceTime, CurrentSplitTimes.Num());
 
             OnRep_LastCheckpointReached(); // Will call OnStrafePlayerCheckpointHitDelegate on reps
             OnRep_CurrentSplitTimes();     // Updates client splits
@@ -122,7 +128,7 @@ void AS_StrafePlayerState::ServerReachedCheckpoint(int32 CheckpointIndex, int32 
         else
         {
             UE_LOG(LogTemp, Warning, TEXT("AS_StrafePlayerState for %s: Attempted to hit checkpoint %d out of order. Last hit: %d"),
-                *GetPlayerNameOrSpectator(), CheckpointIndex, LastCheckpointReached);
+                *GetPlayerName(), CheckpointIndex, LastCheckpointReached);
         }
     }
 }
@@ -137,12 +143,12 @@ void AS_StrafePlayerState::ServerFinishedRace(int32 FinalCheckpointIndex, int32 
             bIsRaceActiveForPlayer = false;
             SetActorTickEnabled(false); // Stop ticking on server
             UE_LOG(LogTemp, Log, TEXT("AS_StrafePlayerState for %s: Finished race at time %f."),
-                *GetPlayerNameOrSpectator(), CurrentRaceTime);
+                *GetPlayerName(), CurrentRaceTime);
 
             if (!BestRaceTime.IsValid() || CurrentRaceTime < BestRaceTime.TotalTime)
             {
                 UE_LOG(LogTemp, Log, TEXT("AS_StrafePlayerState for %s: NEW BEST TIME! Old: %f, New: %f"),
-                    *GetPlayerNameOrSpectator(), BestRaceTime.TotalTime, CurrentRaceTime);
+                    *GetPlayerName(), BestRaceTime.TotalTime, CurrentRaceTime);
                 BestRaceTime.TotalTime = CurrentRaceTime;
                 BestRaceTime.SplitTimes = CurrentSplitTimes;
                 OnRep_BestRaceTime(); // Broadcasts OnStrafePlayerNewBestTimeDelegate
@@ -155,7 +161,7 @@ void AS_StrafePlayerState::ServerFinishedRace(int32 FinalCheckpointIndex, int32 
         else
         {
             UE_LOG(LogTemp, Error, TEXT("AS_StrafePlayerState for %s: ServerFinishedRace - CONDITIONS NOT MET. LastCP: %d (Expected %d), Splits.Num(): %d (Expected %d)"),
-                *GetPlayerNameOrSpectator(), LastCheckpointReached, FinalCheckpointIndex, CurrentSplitTimes.Num(), TotalCheckpointsInRace);
+                *GetPlayerName(), LastCheckpointReached, FinalCheckpointIndex, CurrentSplitTimes.Num(), TotalCheckpointsInRace);
         }
     }
 }
@@ -164,7 +170,7 @@ void AS_StrafePlayerState::ServerResetRaceState()
 {
     if (HasAuthority())
     {
-        UE_LOG(LogTemp, Log, TEXT("AS_StrafePlayerState for %s: ServerResetRaceState called."), *GetPlayerNameOrSpectator());
+        UE_LOG(LogTemp, Log, TEXT("AS_StrafePlayerState for %s: ServerResetRaceState called."), *GetPlayerName());
         CurrentRaceTime = 0.0f;
         CurrentSplitTimes.Empty();
         LastCheckpointReached = -1;

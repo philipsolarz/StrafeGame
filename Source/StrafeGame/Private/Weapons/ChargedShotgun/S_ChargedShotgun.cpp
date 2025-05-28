@@ -1,5 +1,5 @@
 #include "Weapons/ChargedShotgun/S_ChargedShotgun.h"
-#include "Weapons/DataAssets/S_HitscanWeaponDataAsset.h" // Or a more specific US_ChargedShotgunDataAsset
+#include "Weapons/S_HitscanWeaponDataAsset.h" // Or a more specific US_ChargedShotgunDataAsset
 #include "Player/S_Character.h"
 // Include other necessary headers like Kismet/GameplayStatics.h if playing sounds directly, etc.
 

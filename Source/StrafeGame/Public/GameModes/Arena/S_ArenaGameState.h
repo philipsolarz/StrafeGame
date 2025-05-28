@@ -24,6 +24,9 @@ public:
     UPROPERTY(BlueprintReadOnly, Replicated, Category = "ArenaGameState|Rules")
     int32 FragLimit;
 
+    UPROPERTY(BlueprintReadOnly, Replicated, Category = "ArenaGameState|Rules")
+    int32 MatchDurationSeconds;
+
     // We already have 'RemainingTime' and 'MatchState' in AS_GameStateBase.
     // If you need to display a specific string for the current state (e.g. "Warmup", "Overtime")
     // you can add a replicated FName/FString property here that GameMode sets.

@@ -2,10 +2,9 @@
 
 #include "CoreMinimal.h"
 #include "Weapons/S_Weapon.h" // Inherit from our base S_Weapon
+#include "Weapons/S_Projectile.h"
 #include "S_ProjectileWeapon.generated.h"
 
-// Forward Declarations
-class AS_Projectile; // Base class for all projectiles
 
 UCLASS(Abstract, Blueprintable) // Abstract as specific projectile weapons (e.g. RocketLauncher) will derive
 class STRAFEGAME_API AS_ProjectileWeapon : public AS_Weapon

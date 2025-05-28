@@ -30,6 +30,8 @@ public:
 
     /** Handles initializing the game session, occurs before any GameMode functions. */
     virtual void InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage) override;
+
+    virtual bool PlayerCanRestart(APlayerController* Player) override;
     //~ End AGameModeBase Interface
 
 

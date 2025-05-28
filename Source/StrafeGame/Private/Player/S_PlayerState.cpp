@@ -41,7 +41,7 @@ void AS_PlayerState::BeginPlay()
 void AS_PlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME_CONDITION(AS_PlayerState, bIsDead, COND_None, REPNOTIFY_Always);
+    DOREPLIFETIME_CONDITION_NOTIFY(AS_PlayerState, bIsDead, COND_None, REPNOTIFY_Always);
 }
 
 void AS_PlayerState::Reset()

@@ -218,41 +218,41 @@ void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon)
         if (WeaponData)
         {
             // Primary Ability
-            if (WeaponData->PrimaryFireAbility) // This is TSubclassOf<UGameplayAbility>
+            if (WeaponData->PrimaryFireAbilityClass) // This is TSubclassOf<UGameplayAbility>
             {
                 // For InputID, we need to get it from the CDO of your specific weapon ability base class
                 // Assuming S_WeaponPrimaryAbility derives from UGameplayAbility and has an 'AbilityInputID' UPROPERTY
-                if (US_WeaponPrimaryAbility* AbilityCDO = Cast<US_WeaponPrimaryAbility>(WeaponData->PrimaryFireAbility->GetDefaultObject()))
+                if (US_WeaponPrimaryAbility* AbilityCDO = Cast<US_WeaponPrimaryAbility>(WeaponData->PrimaryFireAbilityClass->GetDefaultObject()))
                 {
                     CurrentPrimaryAbilityInputID = AbilityCDO->AbilityInputID;
                 }
                 else {
                     // Fallback or warning if cast fails or it's just a UGameplayAbility
                     // You might have a generic "GetInputID" interface on abilities too
-                    UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: PrimaryFireAbility CDO for %s is not of expected type S_WeaponPrimaryAbility or derived."), *WeaponData->GetName());
+                    UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: PrimaryFireAbilityClass CDO for %s is not of expected type S_WeaponPrimaryAbility or derived."), *WeaponData->GetName());
                 }
 
                 if (HasAuthority())
                 {
-                    FGameplayAbilitySpec Spec(WeaponData->PrimaryFireAbility, 1, CurrentPrimaryAbilityInputID, NewWeapon);
+                    FGameplayAbilitySpec Spec(WeaponData->PrimaryFireAbilityClass, 1, CurrentPrimaryAbilityInputID, NewWeapon);
                     CurrentWeaponAbilityHandles.Add(ASC->GiveAbility(Spec));
                 }
             }
 
             // Secondary Ability
-            if (WeaponData->SecondaryFireAbility)
+            if (WeaponData->SecondaryFireAbilityClass)
             {
-                if (US_WeaponSecondaryAbility* AbilityCDO = Cast<US_WeaponSecondaryAbility>(WeaponData->SecondaryFireAbility->GetDefaultObject()))
+                if (US_WeaponSecondaryAbility* AbilityCDO = Cast<US_WeaponSecondaryAbility>(WeaponData->SecondaryFireAbilityClass->GetDefaultObject()))
                 {
                     CurrentSecondaryAbilityInputID = AbilityCDO->AbilityInputID;
                 }
                 else {
-                    UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: SecondaryFireAbility CDO for %s is not of expected type S_WeaponSecondaryAbility or derived."), *WeaponData->GetName());
+                    UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: SecondaryFireAbilityClass CDO for %s is not of expected type S_WeaponSecondaryAbility or derived."), *WeaponData->GetName());
                 }
 
                 if (HasAuthority())
                 {
-                    FGameplayAbilitySpec Spec(WeaponData->SecondaryFireAbility, 1, CurrentSecondaryAbilityInputID, NewWeapon);
+                    FGameplayAbilitySpec Spec(WeaponData->SecondaryFireAbilityClass, 1, CurrentSecondaryAbilityInputID, NewWeapon);
                     CurrentWeaponAbilityHandles.Add(ASC->GiveAbility(Spec));
                 }
             }

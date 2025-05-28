@@ -259,7 +259,7 @@ void AS_StrafeManager::UpdatePlayerInScoreboard(AS_PlayerState* PlayerStateBase)
     else
     {
         FPlayerScoreboardEntry_Strafe NewEntry;
-        NewEntry.PlayerName = StrafePS->GetPlayerName().ToString(); // Corrected
+        NewEntry.PlayerName = StrafePS->GetPlayerName();
         NewEntry.BestTime = CurrentBestTime;
         NewEntry.PlayerStateRef = StrafePS;
         Scoreboard.Add(NewEntry);

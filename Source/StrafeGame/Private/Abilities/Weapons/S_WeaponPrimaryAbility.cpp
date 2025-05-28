@@ -11,12 +11,16 @@
 #include "Animation/AnimMontage.h"
 #include "GameFramework/Controller.h"
 #include "GameplayEffectTypes.h" 
+#include "Abilities/GameplayAbility.h"
 
 US_WeaponPrimaryAbility::US_WeaponPrimaryAbility()
 {
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
     AbilityInputID = 0;
-    AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire"))); // CORRECTED
+    //AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire"))); // CORRECTED
+    FGameplayTagContainer TempTags;
+    TempTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire")));
+    SetAssetTags(TempTags);
 }
 
 bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, OUT FGameplayTagContainer* OptionalRelevantTags) const
@@ -139,7 +143,6 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
             ProjClass = ProjData->ProjectileClass;
         }
 
-        // const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // Old (around line 144)
         const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // Corrected
         Weapon->ExecuteFire(
             FireStartLocation,
