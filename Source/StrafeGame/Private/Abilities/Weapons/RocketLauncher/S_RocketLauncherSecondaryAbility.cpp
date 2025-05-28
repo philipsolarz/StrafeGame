@@ -2,7 +2,7 @@
 #include "Weapons/RocketLauncher/S_RocketLauncher.h"
 #include "Weapons/S_Projectile.h" // For AS_Projectile
 #include "Player/S_Character.h"
-#include "AbilitySystemComponent.h" 
+#include "AbilitySystemComponent.h"
 
 US_RocketLauncherSecondaryAbility::US_RocketLauncherSecondaryAbility()
 {

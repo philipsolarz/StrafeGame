@@ -4,6 +4,7 @@
 #include "Weapons/S_ProjectileWeaponDataAsset.h"    // For getting projectile class
 #include "Engine/World.h"                 // For spawning
 #include "GameFramework/Controller.h"     // For AController
+#include "GameFramework/ProjectileMovementComponent.h"
 
 AS_ProjectileWeapon::AS_ProjectileWeapon()
 {

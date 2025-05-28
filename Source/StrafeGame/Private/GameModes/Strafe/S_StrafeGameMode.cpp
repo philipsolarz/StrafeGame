@@ -1,9 +1,10 @@
+// Source/StrafeGame/Private/GameModes/Strafe/S_StrafeGameMode.cpp
 #include "GameModes/Strafe/S_StrafeGameMode.h"
 #include "GameModes/Strafe/S_StrafeGameState.h"
 #include "GameModes/Strafe/S_StrafePlayerState.h" // Specific PlayerState
 #include "Player/S_PlayerController.h"
 #include "Player/S_Character.h"
-#include "GameModes/Strafe/S_StrafeManager.h" // The refactored StrafeManager - To be created
+#include "GameModes/Strafe/S_StrafeManager.h" 
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -20,8 +21,6 @@ AS_StrafeGameMode::AS_StrafeGameMode()
     PostMatchTime = 15.0f;
 
     // StrafeManagerClass should be set in Blueprint editor to your BP_S_StrafeManager
-    // For C++ default, if you have a base C++ AS_StrafeManager:
-    // StrafeManagerClass = AS_StrafeManager::StaticClass(); 
     CurrentStrafeManager = nullptr;
 }
 
@@ -38,7 +37,7 @@ void AS_StrafeGameMode::InitGameState()
     if (StrafeGS)
     {
         StrafeGS->SetStrafeManager(CurrentStrafeManager); // Let GameState know about the manager
-        // MatchDurationSeconds will be used to set RemainingTime when match starts
+        StrafeGS->MatchDurationSeconds = MatchDurationSeconds; // Set replicated duration on GameState
     }
 }
 
@@ -59,7 +58,7 @@ void AS_StrafeGameMode::PostLogin(APlayerController* NewPlayer)
     }
 
     // If match is in warmup or already started, spawn pawn immediately
-    if (IsMatchInProgress() || GetMatchState() == MatchState::WaitingToStart || GetMatchState() == FName(TEXT("Warmup"))) // Using FName for custom state check
+    if (IsMatchInProgress() || GetMatchState() == MatchState::WaitingToStart || GetMatchState() == FName(TEXT("Warmup")))
     {
         RestartPlayer(NewPlayer);
     }
@@ -67,15 +66,11 @@ void AS_StrafeGameMode::PostLogin(APlayerController* NewPlayer)
 
 bool AS_StrafeGameMode::PlayerCanRestart(APlayerController* Player)
 {
-    // In Strafe mode, players can typically always restart to try again.
-    // Unless in post-match or map transitioning.
     if (GetMatchState() == MatchState::InProgress || GetMatchState() == FName(TEXT("Warmup")))
     {
-        return true; // Base Super::PlayerCanRestart checks if not spectator, etc.
-        // But for strafe, even if alive, they might want to restart at start line.
-        // This might need custom RestartPlayer logic to always put them at the race start.
+        return Super::PlayerCanRestart(Player);
     }
-    if (GetMatchState() == MatchState::WaitingToStart && WarmupTime <= 0.f) // If no warmup, allow spawn
+    if (GetMatchState() == MatchState::WaitingToStart && WarmupTime <= 0.f)
     {
         return Super::PlayerCanRestart(Player);
     }
@@ -86,7 +81,6 @@ bool AS_StrafeGameMode::PlayerCanRestart(APlayerController* Player)
 void AS_StrafeGameMode::Tick(float DeltaSeconds)
 {
     Super::Tick(DeltaSeconds);
-    // AGameMode::Tick handles match state transitions timer.
 }
 
 void AS_StrafeGameMode::HandleMatchIsWaitingToStart()
@@ -96,7 +90,7 @@ void AS_StrafeGameMode::HandleMatchIsWaitingToStart()
 
     if (CurrentStrafeManager)
     {
-        CurrentStrafeManager->RefreshAllCheckpoints(); // Ensure checkpoints are set up
+        CurrentStrafeManager->RefreshAndInitializeCheckpoints(); // Corrected
     }
 
     if (WarmupTime > 0.f)
@@ -106,12 +100,12 @@ void AS_StrafeGameMode::HandleMatchIsWaitingToStart()
         if (StrafeGS)
         {
             StrafeGS->SetRemainingTime(FMath::CeilToInt(WarmupTime));
-            StrafeGS->SetCurrentMatchStateName(FName(TEXT("Warmup"))); // Update replicated state name
+            StrafeGS->SetCurrentMatchStateName(FName(TEXT("Warmup")));
         }
     }
     else
     {
-        StartMatch(); // This will call HandleMatchHasStarted
+        StartMatch();
     }
 }
 
@@ -130,14 +124,14 @@ void AS_StrafeGameMode::OnWarmupTimerEnd()
 
 void AS_StrafeGameMode::HandleMatchHasStarted()
 {
-    Super::HandleMatchHasStarted(); // Sets MatchState to InProgress
+    Super::HandleMatchHasStarted();
     UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match has started (InProgress)."));
 
     AS_StrafeGameState* StrafeGS = GetStrafeGameState();
     if (StrafeGS)
     {
         StrafeGS->SetRemainingTime(MatchDurationSeconds);
-        StrafeGS->SetCurrentMatchStateName(NAME_None); // Clear override if any
+        StrafeGS->SetCurrentMatchStateName(NAME_None);
     }
 
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
@@ -147,11 +141,10 @@ void AS_StrafeGameMode::HandleMatchHasStarted()
         {
             RestartPlayer(PC);
         }
-        // Tell each player's StrafePlayerState to start their individual race timers
-        AS_StrafePlayerState* StrafePS = PC->GetPlayerState<AS_StrafePlayerState>();
+        AS_StrafePlayerState* StrafePS = PC ? PC->GetPlayerState<AS_StrafePlayerState>() : nullptr;
         if (StrafePS)
         {
-            StrafePS->ServerStartRace(); // Start individual race tracking
+            StrafePS->ServerStartRace();
         }
     }
     StartMainMatchTimer();
@@ -179,11 +172,11 @@ void AS_StrafeGameMode::UpdateMainMatchTime()
         CurrentTime--;
         StrafeGS->SetRemainingTime(CurrentTime);
 
-        if (MatchDurationSeconds > 0 && CurrentTime <= 0) // Only end if there was a duration
+        if (MatchDurationSeconds > 0 && CurrentTime <= 0)
         {
             UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match time limit reached."));
             GetWorldTimerManager().ClearTimer(MatchTimerHandle);
-            EndMatch(); // AGameMode's EndMatch will set state to WaitingPostMatch
+            EndMatch();
         }
     }
     else if (IsMatchInProgress())
@@ -194,17 +187,14 @@ void AS_StrafeGameMode::UpdateMainMatchTime()
 
 void AS_StrafeGameMode::HandleMatchHasEnded()
 {
-    Super::HandleMatchHasEnded(); // Sets MatchState to WaitingPostMatch
+    Super::HandleMatchHasEnded();
     UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match has ended (WaitingPostMatch)."));
     GetWorldTimerManager().ClearTimer(MatchTimerHandle);
 
-    // In Strafe mode, there isn't a single "winner" in the FFA sense.
-    // The GameState might display final times or leaderboards.
     AS_StrafeGameState* StrafeGS = GetStrafeGameState();
     if (StrafeGS)
     {
         StrafeGS->SetCurrentMatchStateName(FName(TEXT("PostMatch")));
-        // Potentially trigger final scoreboard update in StrafeManager
         if (CurrentStrafeManager)
         {
             // CurrentStrafeManager->FinalizeScoreboard(); // Hypothetical function
@@ -218,7 +208,7 @@ void AS_StrafeGameMode::HandleMatchHasEnded()
     }
     else
     {
-        OnPostMatchTimerEnd(); // No delay, proceed to end actions
+        OnPostMatchTimerEnd();
     }
 }
 
@@ -232,7 +222,7 @@ void AS_StrafeGameMode::OnPostMatchTimerEnd()
 {
     GetWorldTimerManager().ClearTimer(PostMatchTimerHandle);
     UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Post-match ended."));
-    RestartGame(); // Or travel to a lobby/menu
+    RestartGame();
 }
 
 void AS_StrafeGameMode::SpawnStrafeManager()
@@ -247,8 +237,6 @@ void AS_StrafeGameMode::SpawnStrafeManager()
         if (CurrentStrafeManager)
         {
             UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Spawned StrafeManager: %s"), *CurrentStrafeManager->GetName());
-            // Initial refresh can be called here or after a slight delay if map actors need to BeginPlay
-            // CurrentStrafeManager->RefreshAllCheckpoints(); (Covered in InitGameState via GetStrafeGameState()->SetStrafeManager)
         }
         else
         {

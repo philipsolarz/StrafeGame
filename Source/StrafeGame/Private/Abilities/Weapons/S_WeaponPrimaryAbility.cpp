@@ -16,7 +16,7 @@ US_WeaponPrimaryAbility::US_WeaponPrimaryAbility()
 {
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
     AbilityInputID = 0;
-    AssetTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire"))); // CORRECTED
+    AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire"))); // CORRECTED
 }
 
 bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, OUT FGameplayTagContainer* OptionalRelevantTags) const
@@ -71,7 +71,12 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
 {
     AS_Character* Character = GetOwningSCharacter();
     AS_Weapon* Weapon = GetEquippedWeapon();
-    const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData(); // This is US_WeaponDataAsset
+    const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
+
+    FVector FireDirection; // Declaration added
+    FVector FireStartLocation;
+    FRotator CamRot;
+    FVector CamAimDir; // Keep CamAimDir as it's used for camera's direct forward vector
 
     if (!Character || !Weapon || !WeaponData)
     {
@@ -79,19 +84,15 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         return;
     }
 
-    FVector FireStartLocation;
-    FRotator CamRot; // CORRECTED
-    FVector CamAimDir;
-
     AController* Controller = Character->GetController();
     if (Controller)
     {
-        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
+        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
         FVector CamLoc;
-        Controller->GetPlayerViewPoint(CamLoc, CamRot); // CORRECTED
-        CamAimDir = CamRot.Vector();
+        Controller->GetPlayerViewPoint(CamLoc, CamRot);
+        CamAimDir = CamRot.Vector(); // Camera's aim direction
 
-        const float MaxTraceDist = WeaponData->MaxAimTraceRange > 0.f ? WeaponData->MaxAimTraceRange : 100000.0f; // CORRECTED
+        const float MaxTraceDist = WeaponData->MaxAimTraceRange > 0.f ? WeaponData->MaxAimTraceRange : 100000.0f;
         FVector CamTraceEnd = CamLoc + CamAimDir * MaxTraceDist;
 
         FHitResult CameraTraceHit;
@@ -110,7 +111,7 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
     }
     else
     {
-        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
+        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
         FireDirection = Weapon->GetActorForwardVector();
     }
 
@@ -121,11 +122,9 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         FireMontageTask->OnInterrupted.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageInterruptedOrCancelled);
         FireMontageTask->OnCancelled.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageInterruptedOrCancelled);
         FireMontageTask->ReadyForActivation();
-        // Derived abilities will call ExecuteFire. This base version might not, or only if no montage.
     }
-    else // No montage, fire directly if this base class is supposed to
+    else
     {
-        // This is an example for a generic fire. Derived classes MUST provide their specific parameters.
         float Spread = 0.f;
         float Range = 0.f;
         TSubclassOf<AS_Projectile> ProjClass = nullptr;
@@ -138,10 +137,10 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         else if (const US_ProjectileWeaponDataAsset* ProjData = Cast<US_ProjectileWeaponDataAsset>(WeaponData))
         {
             ProjClass = ProjData->ProjectileClass;
-            // Range for projectile is determined by lifespan/speed
         }
 
-        const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED: UGameplayAbility method
+        // const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // Old (around line 144)
+        const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // Corrected
         Weapon->ExecuteFire(
             FireStartLocation,
             FireDirection,
@@ -157,14 +156,14 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
     if (WeaponData->MuzzleFlashCueTag.IsValid() && ASC)
     {
         FGameplayCueParameters CueParams;
-        CueParams.Location = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
-        CueParams.Normal = FireDirection;
+        CueParams.Location = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
+        CueParams.Normal = FireDirection; // Corrected usage
         CueParams.Instigator = Character;
         CueParams.EffectCauser = Weapon;
         ASC->ExecuteGameplayCue(WeaponData->MuzzleFlashCueTag, CueParams);
     }
 
-    if (!FireMontageTask) // If there was no montage, we already ended, but to be safe if logic changes
+    if (!FireMontageTask)
     {
         // EndAbility(Handle, ActorInfo, ActivationInfo, false, false); // Already handled
     }

@@ -96,7 +96,7 @@ void US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAb
         FireDirection = Launcher->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED
+    const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // CORRECTED
     Launcher->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), 0.f, 0.f, LauncherData->ProjectileClass);
 
     UAbilityTask_PlayMontageAndWait* MontageTask = PlayWeaponMontage(LauncherData->FireMontage);

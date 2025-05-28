@@ -202,7 +202,7 @@ void US_ChargedShotgunSecondaryAbility::AttemptFireOverchargedShot()
         FireDirection = Weapon->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED
+    const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData(); // CORRECTED
     Weapon->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), WeaponData->SecondaryFireSpreadAngle, WeaponData->SecondaryFireHitscanRange, nullptr);
 
     if (WeaponData->SecondaryOverchargedFireCue.IsValid()) ASC->ExecuteGameplayCue(WeaponData->SecondaryOverchargedFireCue, ASC->MakeEffectContext());

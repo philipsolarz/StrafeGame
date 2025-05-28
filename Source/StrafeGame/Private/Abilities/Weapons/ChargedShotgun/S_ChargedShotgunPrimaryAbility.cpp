@@ -198,7 +198,7 @@ void US_ChargedShotgunPrimaryAbility::DoFire()
         FireDirection = Weapon->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED: UGameplayAbility method
+    const FGameplayEventData* AbilityTriggerData = GetCurrentAbilityTriggerData();
     Weapon->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), WeaponData->PrimaryFireSpreadAngle, WeaponData->PrimaryFireHitscanRange, nullptr);
 
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
