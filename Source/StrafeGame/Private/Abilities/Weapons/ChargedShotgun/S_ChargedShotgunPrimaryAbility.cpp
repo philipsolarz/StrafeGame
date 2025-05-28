@@ -17,7 +17,7 @@ US_ChargedShotgunPrimaryAbility::US_ChargedShotgunPrimaryAbility()
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor; //
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted; //
 
-    ChargeInProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.Charging.Primary.Shotgun")); //
+    ChargeInProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.ChargedShotgun.PrimaryAbility.Charging")); //
     // EarlyReleaseCooldownTag is not initialized here, assuming it's used if PrimaryEarlyReleaseCooldownEffect applies a tag.
 
     bIsCharging = false; //

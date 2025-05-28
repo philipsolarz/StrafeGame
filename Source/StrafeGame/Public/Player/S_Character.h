@@ -78,33 +78,33 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     TObjectPtr<US_WeaponInventoryComponent> WeaponInventoryComponent;
 
-    // INPUT (using TSoftObjectPtr for deferred loading)
+    // INPUT
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input")
-    TSoftObjectPtr<UInputMappingContext> DefaultMappingContext;
+    UInputMappingContext* DefaultMappingContext;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input")
-    TSoftObjectPtr<UInputMappingContext> WeaponMappingContext;
+    UInputMappingContext* WeaponMappingContext;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
-    TSoftObjectPtr<UInputAction> MoveAction;
+    UInputAction* MoveAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
-    TSoftObjectPtr<UInputAction> LookAction;
+    UInputAction* LookAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
-    TSoftObjectPtr<UInputAction> JumpAction;
+    UInputAction* JumpAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
-    TSoftObjectPtr<UInputAction> PrimaryAbilityAction;
+    UInputAction* PrimaryAbilityAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
-    TSoftObjectPtr<UInputAction> SecondaryAbilityAction;
+    UInputAction* SecondaryAbilityAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
-    TSoftObjectPtr<UInputAction> NextWeaponAction;
+    UInputAction* NextWeaponAction;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
-    TSoftObjectPtr<UInputAction> PreviousWeaponAction;
+    UInputAction* PreviousWeaponAction;
 
     // Input handler functions
     virtual void Input_Move(const FInputActionValue& InputActionValue);

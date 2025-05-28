@@ -15,8 +15,8 @@ US_ChargedShotgunSecondaryAbility::US_ChargedShotgunSecondaryAbility()
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 
-    ChargeInProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.Charging.Secondary.Shotgun"));
-    OverchargedStateTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.Overcharged.Secondary.Shotgun"));
+    ChargeInProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.ChargedShotgun.SecondaryAbility.Charging"));
+    OverchargedStateTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.ChargedShotgun.SecondaryAbility.Overcharged"));
 
     bIsCharging = false;
     bOverchargedShotStored = false;

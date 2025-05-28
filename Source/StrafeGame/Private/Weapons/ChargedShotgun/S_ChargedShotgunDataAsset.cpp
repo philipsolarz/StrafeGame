@@ -22,7 +22,7 @@ US_ChargedShotgunDataAsset::US_ChargedShotgunDataAsset()
     SecondaryChargeTime = 2.0f;
     SecondaryFireLockoutEffect = nullptr; // Assign the GE Blueprint subclass here
     // SecondaryFireLockoutTag should be the tag *applied by* SecondaryFireLockoutEffect
-    SecondaryFireLockoutTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.Cooldown.Shotgun.Lockout")); // Example Tag
+    SecondaryFireLockoutTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.ChargedShotgun.Lockout")); // Example Tag
     SecondaryFirePelletCount = 12;
     SecondaryFireSpreadAngle = 3.0f;
     SecondaryFireHitscanRange = 6000.0f;
