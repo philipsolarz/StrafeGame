@@ -2,10 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Weapons/S_WeaponDataAsset.h" // Inherit from base
+#include "Weapons/S_Projectile.h"
 #include "S_ProjectileWeaponDataAsset.generated.h"
 
 // Forward Declarations
-class AS_Projectile; // Base class for projectiles
+//class AS_Projectile; // Base class for projectiles
 
 /**
  * DataAsset for Projectile-specific weapon properties.

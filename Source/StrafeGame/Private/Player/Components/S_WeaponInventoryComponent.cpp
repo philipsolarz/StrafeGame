@@ -1,3 +1,4 @@
+// Source/StrafeGame/Private/Player/Components/S_WeaponInventoryComponent.cpp
 #include "Player/Components/S_WeaponInventoryComponent.h"
 #include "Weapons/S_Weapon.h"
 #include "Weapons/S_WeaponDataAsset.h"
@@ -12,19 +13,19 @@
 
 US_WeaponInventoryComponent::US_WeaponInventoryComponent()
 {
-    PrimaryComponentTick.bCanEverTick = false; // Not ticking by default
-    SetIsReplicatedByDefault(true); // This component will replicate
+    PrimaryComponentTick.bCanEverTick = false;
+    SetIsReplicatedByDefault(true);
 
     CurrentWeapon = nullptr;
     PendingWeapon = nullptr;
     OwningCharacter = nullptr;
     OwnerAbilitySystemComponent = nullptr;
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::US_WeaponInventoryComponent: Constructor for component on %s"), *GetNameSafe(GetOwner()));
 }
 
 void US_WeaponInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
     DOREPLIFETIME(US_WeaponInventoryComponent, WeaponInventory);
     DOREPLIFETIME(US_WeaponInventoryComponent, CurrentWeapon);
 }
@@ -32,27 +33,30 @@ void US_WeaponInventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimePro
 void US_WeaponInventoryComponent::BeginPlay()
 {
     Super::BeginPlay();
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::BeginPlay: Component for %s"), *GetNameSafe(GetOwner()));
 
     CacheOwnerReferences();
 
     if (GetOwnerRole() == ROLE_Authority && OwningCharacter)
     {
-        // Grant starting weapons
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::BeginPlay: Server - Granting starting weapons for %s."), *OwningCharacter->GetName());
         for (TSubclassOf<AS_Weapon> WeaponClass : StartingWeaponClasses)
         {
             if (WeaponClass)
             {
+                UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::BeginPlay: Adding starting weapon %s."), *WeaponClass->GetName());
                 ServerAddWeapon(WeaponClass);
             }
         }
 
-        // Equip the first weapon in the starting list, or the first one added if any.
         if (StartingWeaponClasses.Num() > 0 && WeaponInventory.Num() > 0 && WeaponInventory[0]->IsA(StartingWeaponClasses[0]))
         {
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::BeginPlay: Equipping first starting weapon %s."), *StartingWeaponClasses[0]->GetName());
             ServerEquipWeaponByClass(StartingWeaponClasses[0]);
         }
-        else if (WeaponInventory.Num() > 0) // Fallback to equip whatever is first if starting list didn't match
+        else if (WeaponInventory.Num() > 0)
         {
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::BeginPlay: Equipping first available weapon %s."), *WeaponInventory[0]->GetClass()->GetName());
             ServerEquipWeaponByClass(WeaponInventory[0]->GetClass());
         }
     }
@@ -60,13 +64,13 @@ void US_WeaponInventoryComponent::BeginPlay()
 
 void US_WeaponInventoryComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    // Clean up spawned weapon actors
     if (GetOwnerRole() == ROLE_Authority)
     {
         for (AS_Weapon* Weapon : WeaponInventory)
         {
             if (Weapon)
             {
+                UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::EndPlay: Destroying weapon %s."), *Weapon->GetName());
                 Weapon->Destroy();
             }
         }
@@ -92,62 +96,77 @@ bool US_WeaponInventoryComponent::CacheOwnerReferences()
             OwnerAbilitySystemComponent = PS->GetAbilitySystemComponent();
         }
     }
-    return OwningCharacter && OwnerAbilitySystemComponent;
+    if (!OwningCharacter) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::CacheOwnerReferences: OwningCharacter is NULL for %s"), *GetNameSafe(GetOwner()));
+        if (!OwnerAbilitySystemComponent && OwningCharacter) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::CacheOwnerReferences: OwnerAbilitySystemComponent is NULL for %s"), *OwningCharacter->GetName());
+            return OwningCharacter && OwnerAbilitySystemComponent;
 }
 
 AS_Weapon* US_WeaponInventoryComponent::SpawnWeaponActor(TSubclassOf<AS_Weapon> WeaponClass)
 {
     if (!WeaponClass || GetOwnerRole() != ROLE_Authority || !GetWorld() || !OwningCharacter)
     {
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::SpawnWeaponActor: Preconditions not met for spawning %s. WeaponClass Valid: %d, IsServer: %d, World Valid: %d, OwningChar Valid: %d"), 
+             *GetNameSafe(WeaponClass), WeaponClass != nullptr, GetOwnerRole() == ROLE_Authority, GetWorld() != nullptr, OwningCharacter != nullptr);
         return nullptr;
     }
 
     FActorSpawnParameters SpawnParams;
-    SpawnParams.Owner = OwningCharacter; // The Character owns the weapon actor
-    SpawnParams.Instigator = OwningCharacter; // The Character is the instigator
+    SpawnParams.Owner = OwningCharacter;
+    SpawnParams.Instigator = OwningCharacter;
     SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
-    // Spawn the weapon slightly offset or at a specific "holstered" location if desired,
-    // then hide it until equipped.
     AS_Weapon* NewWeapon = GetWorld()->SpawnActor<AS_Weapon>(WeaponClass, OwningCharacter->GetActorLocation(), OwningCharacter->GetActorRotation(), SpawnParams);
     if (NewWeapon)
     {
-        NewWeapon->SetActorHiddenInGame(true); // Hide until explicitly equipped
-        NewWeapon->SetOwnerCharacter(OwningCharacter); // Let weapon know its character
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::SpawnWeaponActor: Successfully spawned %s for %s."), *NewWeapon->GetName(), *OwningCharacter->GetName());
+        NewWeapon->SetActorHiddenInGame(true);
+        NewWeapon->SetOwnerCharacter(OwningCharacter);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("US_WeaponInventoryComponent::SpawnWeaponActor: Failed to spawn weapon of class %s for %s."), *WeaponClass->GetName(), *OwningCharacter->GetName());
     }
     return NewWeapon;
 }
 
 void US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon(AS_Weapon* WeaponToGrantAmmo)
 {
-    if (GetOwnerRole() != ROLE_Authority || !WeaponToGrantAmmo || !CacheOwnerReferences()) return;
+    if (GetOwnerRole() != ROLE_Authority || !WeaponToGrantAmmo || !CacheOwnerReferences())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon: Preconditions not met for %s."), *GetNameSafe(WeaponToGrantAmmo));
+        return;
+    }
 
     const US_WeaponDataAsset* WeaponData = WeaponToGrantAmmo->GetWeaponData();
     if (OwnerAbilitySystemComponent && WeaponData && WeaponData->InitialAmmoEffect)
     {
         FGameplayEffectContextHandle EffectContext = OwnerAbilitySystemComponent->MakeEffectContext();
-        EffectContext.AddSourceObject(WeaponToGrantAmmo); // Source of the effect is the weapon
+        EffectContext.AddSourceObject(WeaponToGrantAmmo);
 
         FGameplayEffectSpecHandle SpecHandle = OwnerAbilitySystemComponent->MakeOutgoingSpec(WeaponData->InitialAmmoEffect, 1, EffectContext);
         if (SpecHandle.IsValid())
         {
             OwnerAbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: Applied InitialAmmoEffect %s for weapon %s on %s"),
-                *WeaponData->InitialAmmoEffect->GetName(), *WeaponToGrantAmmo->GetName(), *OwningCharacter->GetName());
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon: Applied InitialAmmoEffect %s for weapon %s on %s"),
+                 *WeaponData->InitialAmmoEffect->GetName(), *WeaponToGrantAmmo->GetName(), *OwningCharacter->GetName());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon: Failed to create spec for InitialAmmoEffect %s on %s"), *WeaponData->InitialAmmoEffect->GetName(), *OwningCharacter->GetName());
         }
     }
     else
     {
-        if (!WeaponData) 
+        if (!WeaponData)
         {
-            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: Weapon %s has no WeaponData."), *WeaponToGrantAmmo->GetName());
+            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon: Weapon %s has no WeaponData."), *WeaponToGrantAmmo->GetName());
         }
         else if (!WeaponData->InitialAmmoEffect) {
-            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: WeaponData for %s has no InitialAmmoEffect set."), *WeaponToGrantAmmo->GetName());
+            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon: WeaponData for %s has no InitialAmmoEffect set."), *WeaponToGrantAmmo->GetName());
         }
         else if (!OwnerAbilitySystemComponent)
         {
-            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: OwnerASC is null, cannot apply initial ammo for %s."), *WeaponToGrantAmmo->GetName());
+            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon: OwnerASC is null, cannot apply initial ammo for %s."), *WeaponToGrantAmmo->GetName());
         }
     }
 }
@@ -155,20 +174,19 @@ void US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon(AS_Weapon* WeaponToG
 
 bool US_WeaponInventoryComponent::ServerAddWeapon(TSubclassOf<AS_Weapon> WeaponClass)
 {
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerAddWeapon: %s attempting to add %s. IsServer: %d"), *GetNameSafe(GetOwner()), *GetNameSafe(WeaponClass), GetOwnerRole() == ROLE_Authority);
     if (GetOwnerRole() != ROLE_Authority || !WeaponClass || !CacheOwnerReferences())
     {
         return false;
     }
 
-    // Check if player already has this weapon type
     for (AS_Weapon* ExistingWeapon : WeaponInventory)
     {
         if (ExistingWeapon && ExistingWeapon->IsA(WeaponClass))
         {
-            // Player already has this weapon. Grant ammo instead (as per pickup logic).
-            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: Player %s already has %s. Applying initial ammo."), *OwningCharacter->GetName(), *WeaponClass->GetName());
-            ApplyInitialAmmoForWeapon(ExistingWeapon); // Re-apply initial ammo effect (effectively "ammo pickup")
-            OnWeaponAddedDelegate.Broadcast(WeaponClass); // Still broadcast, as pickup was "successful"
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerAddWeapon: Player %s already has %s. Applying initial ammo."), *OwningCharacter->GetName(), *WeaponClass->GetName());
+            ApplyInitialAmmoForWeapon(ExistingWeapon);
+            OnWeaponAddedDelegate.Broadcast(WeaponClass);
             return true;
         }
     }
@@ -177,34 +195,37 @@ bool US_WeaponInventoryComponent::ServerAddWeapon(TSubclassOf<AS_Weapon> WeaponC
     if (NewWeapon)
     {
         WeaponInventory.Add(NewWeapon);
-        OnRep_WeaponInventory(); // Notify clients of inventory change
+        OnRep_WeaponInventory();
 
-        ApplyInitialAmmoForWeapon(NewWeapon); // Grant initial ammo
+        ApplyInitialAmmoForWeapon(NewWeapon);
 
         OnWeaponAddedDelegate.Broadcast(WeaponClass);
-        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: Added weapon %s to %s's inventory."), *NewWeapon->GetName(), *OwningCharacter->GetName());
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerAddWeapon: Added weapon %s to %s's inventory. Total weapons: %d"), *NewWeapon->GetName(), *OwningCharacter->GetName(), WeaponInventory.Num());
         return true;
     }
+    UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ServerAddWeapon: Failed to spawn new weapon %s for %s."), *WeaponClass->GetName(), *OwningCharacter->GetName());
     return false;
 }
 
 void US_WeaponInventoryComponent::ServerEquipWeaponByClass(TSubclassOf<AS_Weapon> WeaponClass)
 {
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: %s attempting to equip %s. IsServer: %d"), *GetNameSafe(GetOwner()), *GetNameSafe(WeaponClass), GetOwnerRole() == ROLE_Authority);
     if (GetOwnerRole() != ROLE_Authority || !OwningCharacter) return;
 
-    if (!WeaponClass) // Request to unequip
+    if (!WeaponClass)
     {
         if (CurrentWeapon)
         {
-            PendingWeapon = nullptr; // Clear any pending switch
-            GetWorld()->GetTimerManager().ClearTimer(WeaponSwitchTimerHandle); // Stop existing switch
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: Requested unequip for %s."), *OwningCharacter->GetName());
+            PendingWeapon = nullptr;
+            GetWorld()->GetTimerManager().ClearTimer(WeaponSwitchTimerHandle);
 
             AS_Weapon* OldWeapon = CurrentWeapon;
-            CurrentWeapon->Unequip(); // Server-side unequip
+            CurrentWeapon->Unequip();
             CurrentWeapon = nullptr;
-            OnRep_CurrentWeapon(); // Replicate null CurrentWeapon
-            OnWeaponEquippedDelegate.Broadcast(nullptr, OldWeapon); // Notify character/systems
-            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: Unequipped weapon on %s."), *OwningCharacter->GetName());
+            OnRep_CurrentWeapon();
+            OnWeaponEquippedDelegate.Broadcast(nullptr, OldWeapon);
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: Unequipped weapon on %s."), *OwningCharacter->GetName());
         }
         return;
     }
@@ -221,24 +242,24 @@ void US_WeaponInventoryComponent::ServerEquipWeaponByClass(TSubclassOf<AS_Weapon
 
     if (!WeaponToEquip)
     {
-        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: %s trying to equip %s, but not found in inventory."), *OwningCharacter->GetName(), *WeaponClass->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: %s trying to equip %s, but not found in inventory."), *OwningCharacter->GetName(), *WeaponClass->GetName());
         return;
     }
 
     if (WeaponToEquip == CurrentWeapon && WeaponToEquip->IsEquipped())
     {
-        // UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: %s is already equipped."), *WeaponClass->GetName());
-        return; // Already equipped
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: %s is already equipped by %s."), *WeaponClass->GetName(), *OwningCharacter->GetName());
+        return;
     }
 
     if (IsSwitchingWeapon())
     {
-        // UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: Already switching weapon, request to equip %s ignored."), *WeaponClass->GetName());
-        return; // Already switching
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: %s - Already switching weapon, request to equip %s ignored."), *OwningCharacter->GetName(), *WeaponClass->GetName());
+        return;
     }
 
     PendingWeapon = WeaponToEquip;
-    float SwitchTime = 0.5f; // Default switch time
+    float SwitchTime = 0.5f;
     const US_WeaponDataAsset* CurrentWeaponData = CurrentWeapon ? CurrentWeapon->GetWeaponData() : nullptr;
     const US_WeaponDataAsset* PendingWeaponData = PendingWeapon ? PendingWeapon->GetWeaponData() : nullptr;
 
@@ -246,69 +267,77 @@ void US_WeaponInventoryComponent::ServerEquipWeaponByClass(TSubclassOf<AS_Weapon
     {
         SwitchTime = CurrentWeaponData->UnequipTime;
     }
-    else if (PendingWeaponData && PendingWeaponData->EquipTime > 0) // Use new weapon's data if current is null or has no specific time
+    else if (PendingWeaponData && PendingWeaponData->EquipTime > 0)
     {
         SwitchTime = PendingWeaponData->EquipTime;
     }
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: %s determined switch time to %s: %f seconds."), *OwningCharacter->GetName(), *PendingWeapon->GetName(), SwitchTime);
 
-    // If there's a weapon currently equipped, unequip it first (visually, abilities cleared on FinishWeaponSwitch)
-    AS_Weapon* OldWeaponToUnequip = CurrentWeapon; // Keep track of this for the delegate
+    AS_Weapon* OldWeaponToUnequip = CurrentWeapon;
     if (CurrentWeapon)
     {
-        CurrentWeapon->StartUnequipEffects(); // Play unequip anim/sound but don't fully unequip logical state yet
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: %s - Starting unequip effects for current weapon %s."), *OwningCharacter->GetName(), *CurrentWeapon->GetName());
+        CurrentWeapon->StartUnequipEffects();
     }
 
-    // Set timer for switch
     GetWorld()->GetTimerManager().SetTimer(WeaponSwitchTimerHandle, this, &US_WeaponInventoryComponent::FinishWeaponSwitch, SwitchTime, false);
-    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: %s initiating switch to %s. Switch time: %f"), *OwningCharacter->GetName(), *PendingWeapon->GetName(), SwitchTime);
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByClass: %s initiating switch to %s. Timer set for %f seconds."), *OwningCharacter->GetName(), *PendingWeapon->GetName(), SwitchTime);
 }
 
 void US_WeaponInventoryComponent::FinishWeaponSwitch()
 {
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::FinishWeaponSwitch: %s attempting to finish switch to %s. IsServer: %d"), *GetNameSafe(GetOwner()), *GetNameSafe(PendingWeapon), GetOwnerRole() == ROLE_Authority);
     if (GetOwnerRole() != ROLE_Authority || !OwningCharacter || !PendingWeapon)
     {
-        PendingWeapon = nullptr; // Clear if something went wrong
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::FinishWeaponSwitch: Preconditions not met or PendingWeapon is null for %s."), *GetNameSafe(GetOwner()));
+        PendingWeapon = nullptr;
         return;
     }
 
-    AS_Weapon* OldWeapon = CurrentWeapon; // This was the weapon active before the switch started
+    AS_Weapon* OldWeapon = CurrentWeapon;
 
     if (OldWeapon && OldWeapon != PendingWeapon)
     {
-        OldWeapon->Unequip(); // Full unequip of the previous weapon
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::FinishWeaponSwitch: %s - Fully unequipped old weapon %s."), *OwningCharacter->GetName(), *OldWeapon->GetName());
+        OldWeapon->Unequip();
     }
 
     CurrentWeapon = PendingWeapon;
-    PendingWeapon = nullptr; // Clear pending state
+    PendingWeapon = nullptr;
 
     if (CurrentWeapon)
     {
-        CurrentWeapon->Equip(OwningCharacter); // Server-side equip
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::FinishWeaponSwitch: %s - Equipping new weapon %s."), *OwningCharacter->GetName(), *CurrentWeapon->GetName());
+        CurrentWeapon->Equip(OwningCharacter);
     }
 
-    OnRep_CurrentWeapon(); // This will replicate CurrentWeapon to clients, triggering their OnRep_CurrentWeapon
+    OnRep_CurrentWeapon();
 
-    // Broadcast that the weapon equip is complete (after delay)
-    // AS_Character will listen to this to grant/remove abilities
     OnWeaponEquippedDelegate.Broadcast(CurrentWeapon, OldWeapon);
-    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: %s finished switch. Equipped: %s"), *OwningCharacter->GetName(), CurrentWeapon ? *CurrentWeapon->GetName() : TEXT("NONE"));
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::FinishWeaponSwitch: %s finished switch. Equipped: %s. OldWeapon: %s"), *OwningCharacter->GetName(), CurrentWeapon ? *CurrentWeapon->GetName() : TEXT("NONE"), OldWeapon ? *OldWeapon->GetName() : TEXT("NONE"));
 }
 
 
 void US_WeaponInventoryComponent::ServerEquipWeaponByIndex(int32 Index)
 {
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByIndex: %s attempting to equip by index %d."), *GetNameSafe(GetOwner()), Index);
     if (GetOwnerRole() == ROLE_Authority && WeaponInventory.IsValidIndex(Index) && WeaponInventory[Index])
     {
         ServerEquipWeaponByClass(WeaponInventory[Index]->GetClass());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ServerEquipWeaponByIndex: Invalid index %d or weapon not found for %s."), Index, *GetNameSafe(GetOwner()));
     }
 }
 
 bool US_WeaponInventoryComponent::ServerRequestNextWeapon_Validate() { return true; }
 void US_WeaponInventoryComponent::ServerRequestNextWeapon_Implementation()
 {
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerRequestNextWeapon_Implementation: %s."), *GetNameSafe(GetOwner()));
     if (WeaponInventory.Num() <= 1 || IsSwitchingWeapon()) return;
 
-    int32 CurrentIndex = CurrentWeapon ? WeaponInventory.IndexOfByKey(CurrentWeapon) : -1; // Could be -1 if no weapon equipped
+    int32 CurrentIndex = CurrentWeapon ? WeaponInventory.IndexOfByKey(CurrentWeapon) : -1;
     int32 NextIndex = 0;
     if (CurrentIndex != INDEX_NONE)
     {
@@ -324,6 +353,7 @@ void US_WeaponInventoryComponent::ServerRequestNextWeapon_Implementation()
 bool US_WeaponInventoryComponent::ServerRequestPreviousWeapon_Validate() { return true; }
 void US_WeaponInventoryComponent::ServerRequestPreviousWeapon_Implementation()
 {
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerRequestPreviousWeapon_Implementation: %s."), *GetNameSafe(GetOwner()));
     if (WeaponInventory.Num() <= 1 || IsSwitchingWeapon()) return;
 
     int32 CurrentIndex = CurrentWeapon ? WeaponInventory.IndexOfByKey(CurrentWeapon) : -1;
@@ -332,7 +362,7 @@ void US_WeaponInventoryComponent::ServerRequestPreviousWeapon_Implementation()
     {
         PrevIndex = (CurrentIndex - 1 + WeaponInventory.Num()) % WeaponInventory.Num();
     }
-    else if (WeaponInventory.Num() > 0) // If nothing equipped, "previous" could wrap to last
+    else if (WeaponInventory.Num() > 0)
     {
         PrevIndex = WeaponInventory.Num() - 1;
     }
@@ -345,26 +375,14 @@ void US_WeaponInventoryComponent::ServerRequestPreviousWeapon_Implementation()
 
 void US_WeaponInventoryComponent::OnRep_WeaponInventory()
 {
-    // Client-side: Inventory list has changed. UI might need to update.
-    // OwningCharacter = Cast<AS_Character>(GetOwner()); // Ensure owner is cached
-    // UE_LOG(LogTemp, Log, TEXT("Client %s: WeaponInventory replicated, Count: %d"), OwningCharacter ? *OwningCharacter->GetName() : TEXT("UnknownOwner"), WeaponInventory.Num());
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::OnRep_WeaponInventory: Client %s - WeaponInventory replicated, Count: %d"), *GetNameSafe(GetOwner()), WeaponInventory.Num());
 }
 
 void US_WeaponInventoryComponent::OnRep_CurrentWeapon()
 {
-    // Client-side: The equipped weapon has changed.
-    // AS_Character binds to OnWeaponEquippedDelegate to handle visual attachment and ability setup.
-    // We need to find what the 'OldWeapon' was on the client to pass to the delegate.
-    // This is tricky because OnRep_CurrentWeapon only tells us the new state.
-    // A common approach is to store a "PreviousCurrentWeapon" locally on the client.
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::OnRep_CurrentWeapon: Client %s - Replicated CurrentWeapon: %s"), *GetNameSafe(GetOwner()), *GetNameSafe(CurrentWeapon));
+    AS_Weapon* OldWeaponForDelegate = nullptr;
 
-    AS_Weapon* OldWeaponForDelegate = nullptr; // This is a simplification. A robust solution might need more state.
-    // For now, the primary purpose is to inform the character about the NEW weapon.
-    // The character's HandleWeaponEquipped will primarily use NewWeapon.
-
-// Ensure all other weapons are visually unequipped
-// This should ideally be handled by AS_Weapon::Equip and AS_Weapon::Unequip internals
-// and the AS_Character's response to OnWeaponEquippedDelegate.
     AS_Character* LocalCharacter = Cast<AS_Character>(GetOwner());
     if (LocalCharacter)
     {
@@ -372,19 +390,18 @@ void US_WeaponInventoryComponent::OnRep_CurrentWeapon()
         {
             if (Weapon && Weapon != CurrentWeapon && Weapon->IsEquipped())
             {
-                Weapon->Unequip(); // Visually unequip if it thought it was equipped
+                UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::OnRep_CurrentWeapon: Client %s - Unequipping %s due to current weapon change."), *LocalCharacter->GetName(), *Weapon->GetName());
+                Weapon->Unequip();
             }
         }
         if (CurrentWeapon && !CurrentWeapon->IsEquipped())
         {
-            CurrentWeapon->Equip(LocalCharacter); // Visually equip the new weapon
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::OnRep_CurrentWeapon: Client %s - Equipping new current weapon %s."), *LocalCharacter->GetName(), *CurrentWeapon->GetName());
+            CurrentWeapon->Equip(LocalCharacter);
         }
     }
 
     OnWeaponEquippedDelegate.Broadcast(CurrentWeapon, OldWeaponForDelegate);
-    // UE_LOG(LogTemp, Log, TEXT("Client %s: OnRep_CurrentWeapon. New: %s"),
-    //     LocalCharacter ? *LocalCharacter->GetName() : TEXT("UnknownOwner"),
-    //     CurrentWeapon ? *CurrentWeapon->GetName() : TEXT("NONE"));
 }
 
 bool US_WeaponInventoryComponent::HasWeapon(TSubclassOf<AS_Weapon> WeaponClass) const
