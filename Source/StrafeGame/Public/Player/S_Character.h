@@ -60,7 +60,7 @@ public:
 
     // Called by S_WeaponInventoryComponent when a weapon is equipped
     UFUNCTION()
-    virtual void HandleWeaponEquipped(AS_Weapon* NewWeapon); // Sticking to NewWeapon only for now
+    virtual void HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeapon);
 
     // Called when health reaches zero (detected by PlayerState's AttributeSet usually)
     UFUNCTION(BlueprintImplementableEvent, Category = "Character|Health")

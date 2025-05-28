@@ -138,9 +138,17 @@ void US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon(AS_Weapon* WeaponToG
     }
     else
     {
-        if (!WeaponData) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: Weapon %s has no WeaponData."), *WeaponToGrantAmmo->GetName());
-        else if (!WeaponData->InitialAmmoEffect) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: WeaponData for %s has no InitialAmmoEffect set."), *WeaponToGrantAmmo->GetName());
-        else if (!OwnerAbilitySystemComponent) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: OwnerASC is null, cannot apply initial ammo for %s."), *WeaponToGrantAmmo->GetName());
+        if (!WeaponData) 
+        {
+            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: Weapon %s has no WeaponData."), *WeaponToGrantAmmo->GetName());
+        }
+        else if (!WeaponData->InitialAmmoEffect) {
+            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: WeaponData for %s has no InitialAmmoEffect set."), *WeaponToGrantAmmo->GetName());
+        }
+        else if (!OwnerAbilitySystemComponent)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent: OwnerASC is null, cannot apply initial ammo for %s."), *WeaponToGrantAmmo->GetName());
+        }
     }
 }
 
@@ -234,13 +242,13 @@ void US_WeaponInventoryComponent::ServerEquipWeaponByClass(TSubclassOf<AS_Weapon
     const US_WeaponDataAsset* CurrentWeaponData = CurrentWeapon ? CurrentWeapon->GetWeaponData() : nullptr;
     const US_WeaponDataAsset* PendingWeaponData = PendingWeapon ? PendingWeapon->GetWeaponData() : nullptr;
 
-    if (CurrentWeaponData && CurrentWeaponData->WeaponStats.WeaponSwitchTime > 0)
+    if (CurrentWeaponData && CurrentWeaponData->UnequipTime > 0)
     {
-        SwitchTime = CurrentWeaponData->WeaponStats.WeaponSwitchTime;
+        SwitchTime = CurrentWeaponData->UnequipTime;
     }
-    else if (PendingWeaponData && PendingWeaponData->WeaponStats.WeaponSwitchTime > 0) // Use new weapon's data if current is null or has no specific time
+    else if (PendingWeaponData && PendingWeaponData->EquipTime > 0) // Use new weapon's data if current is null or has no specific time
     {
-        SwitchTime = PendingWeaponData->WeaponStats.WeaponSwitchTime;
+        SwitchTime = PendingWeaponData->EquipTime;
     }
 
     // If there's a weapon currently equipped, unequip it first (visually, abilities cleared on FinishWeaponSwitch)

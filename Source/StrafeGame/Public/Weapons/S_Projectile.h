@@ -9,9 +9,9 @@
 class USphereComponent;
 class UProjectileMovementComponent;
 class UStaticMeshComponent;
-class AS_Weapon; // The weapon that fired this projectile
+class AS_ProjectileWeapon; // The weapon that fired this projectile
 class AS_Character; // The character that fired this projectile
-class US_WeaponDataAsset; // To access weapon-specific projectile data like explosion cues
+class US_ProjectileWeaponDataAsset; // To access weapon-specific projectile data like explosion cues
 class UParticleSystem; // For particle effects (can be UNiagaraSystem too)
 class USoundBase;      // For sounds
 
@@ -55,7 +55,7 @@ public:
      * @param InWeaponDataAsset The DataAsset of the owning weapon, for accessing shared fx, cues etc.
      */
     UFUNCTION(BlueprintCallable, Category = "Projectile")
-    virtual void InitializeProjectile(APawn* InInstigatorPawn, AS_Weapon* InOwningWeapon, const US_WeaponDataAsset* InWeaponDataAsset);
+    virtual void InitializeProjectile(APawn* InInstigatorPawn, AS_ProjectileWeapon* InOwningWeapon, const US_ProjectileWeaponDataAsset* InWeaponDataAsset);
 
     /**
      * Handles the projectile's impact with something.
@@ -83,11 +83,11 @@ protected:
 
     /** The weapon that fired this projectile. Replicated. */
     UPROPERTY(Transient, Replicated)
-    TObjectPtr<AS_Weapon> OwningWeapon;
+    TObjectPtr<AS_ProjectileWeapon> OwningWeapon;
 
     /** WeaponDataAsset from the owning weapon. Not replicated, set on spawn for server & client. */
     UPROPERTY(BlueprintReadOnly, Category = "ProjectileConfig")
-    TObjectPtr<const US_WeaponDataAsset> OwningWeaponDataAsset;
+    TObjectPtr<const US_ProjectileWeaponDataAsset> OwningWeaponDataAsset;
 
     /** If true, the projectile will explode when it hits anything. */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "ProjectileConfig|Behavior")

@@ -1,6 +1,6 @@
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncher.h"
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h"
-#include "Weapons/DataAssets/S_ProjectileWeaponDataAsset.h" // Or US_StickyLauncherDataAsset
+#include "Weapons/S_ProjectileWeaponDataAsset.h" // Or US_StickyLauncherDataAsset
 
 AS_StickyGrenadeLauncher::AS_StickyGrenadeLauncher()
 {
@@ -9,7 +9,7 @@ AS_StickyGrenadeLauncher::AS_StickyGrenadeLauncher()
 
 bool AS_StickyGrenadeLauncher::DetonateOldestActiveSticky()
 {
-    if (GetOwnerRole() != ROLE_Authority) return false;
+    if (!HasAuthority()) return false;
 
     if (ActiveProjectiles.Num() > 0)
     {

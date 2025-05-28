@@ -167,7 +167,7 @@ void AS_Character::InitializeWithPlayerState()
             // Initialize weapon if one is already equipped on PlayerState (e.g., after respawn)
             if (WeaponInventoryComponent)
             {
-                HandleWeaponEquipped(WeaponInventoryComponent->GetCurrentWeapon());
+                HandleWeaponEquipped(WeaponInventoryComponent->GetCurrentWeapon(), nullptr);
             }
 
             bHasInitializedWithPlayerState = true;
@@ -189,7 +189,7 @@ void AS_Character::BindToPlayerStateAttributes()
 }
 
 
-void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon)
+void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeapon)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
     if (!ASC)
@@ -218,17 +218,14 @@ void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon)
         if (WeaponData)
         {
             // Primary Ability
-            if (WeaponData->PrimaryFireAbilityClass) // This is TSubclassOf<UGameplayAbility>
+            if (WeaponData->PrimaryFireAbilityClass)
             {
-                // For InputID, we need to get it from the CDO of your specific weapon ability base class
-                // Assuming S_WeaponPrimaryAbility derives from UGameplayAbility and has an 'AbilityInputID' UPROPERTY
                 if (US_WeaponPrimaryAbility* AbilityCDO = Cast<US_WeaponPrimaryAbility>(WeaponData->PrimaryFireAbilityClass->GetDefaultObject()))
                 {
                     CurrentPrimaryAbilityInputID = AbilityCDO->AbilityInputID;
                 }
-                else {
-                    // Fallback or warning if cast fails or it's just a UGameplayAbility
-                    // You might have a generic "GetInputID" interface on abilities too
+                else
+                {
                     UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: PrimaryFireAbilityClass CDO for %s is not of expected type S_WeaponPrimaryAbility or derived."), *WeaponData->GetName());
                 }
 
@@ -246,7 +243,8 @@ void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon)
                 {
                     CurrentSecondaryAbilityInputID = AbilityCDO->AbilityInputID;
                 }
-                else {
+                else
+                {
                     UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: SecondaryFireAbilityClass CDO for %s is not of expected type S_WeaponSecondaryAbility or derived."), *WeaponData->GetName());
                 }
 
@@ -258,8 +256,6 @@ void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon)
             }
         }
     }
-    //UE_LOG(LogTemp, Log, TEXT("Character %s HandleWeaponEquipped for %s. PrimaryInputID: %d, SecondaryInputID: %d"),
-    //    *GetName(), NewWeapon ? *NewWeapon->GetName() : TEXT("NONE"), CurrentPrimaryAbilityInputID, CurrentSecondaryAbilityInputID);
 }
 
 

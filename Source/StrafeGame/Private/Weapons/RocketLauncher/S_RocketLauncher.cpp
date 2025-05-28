@@ -1,6 +1,6 @@
 #include "Weapons/RocketLauncher/S_RocketLauncher.h"
 #include "Weapons/RocketLauncher/S_RocketProjectile.h" // Specific projectile type
-#include "Weapons/DataAssets/S_ProjectileWeaponDataAsset.h" // Or a more specific US_RocketLauncherDataAsset
+#include "Weapons/S_ProjectileWeaponDataAsset.h" // Or a more specific US_RocketLauncherDataAsset
 
 AS_RocketLauncher::AS_RocketLauncher()
 {
@@ -9,7 +9,7 @@ AS_RocketLauncher::AS_RocketLauncher()
 
 bool AS_RocketLauncher::DetonateOldestActiveRocket()
 {
-    if (GetOwnerRole() != ROLE_Authority) return false;
+    if (!HasAuthority()) return false;
 
     if (ActiveProjectiles.Num() > 0)
     {

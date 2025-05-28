@@ -2,9 +2,9 @@
 #include "Components/SphereComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Weapons/S_Weapon.h"
+#include "Weapons/S_ProjectileWeapon.h"
 #include "Player/S_Character.h" // For APawn / AS_Character casting
-#include "Weapons/S_WeaponDataAsset.h"
+#include "Weapons/S_ProjectileWeaponDataAsset.h"
 #include "Net/UnrealNetwork.h"
 #include "Kismet/GameplayStatics.h" // For ApplyRadialDamageWithFalloff
 #include "GameFramework/DamageType.h" // For UDamageType
@@ -110,7 +110,7 @@ void AS_Projectile::LifeSpanExpired()
     // Super::LifeSpanExpired(); // Calls Destroy() by default, so if we handle it, we might not call super.
 }
 
-void AS_Projectile::InitializeProjectile(APawn* InInstigatorPawn, AS_Weapon* InOwningWeapon, const US_WeaponDataAsset* InWeaponDataAsset)
+void AS_Projectile::InitializeProjectile(APawn* InInstigatorPawn, AS_ProjectileWeapon* InOwningWeapon, const US_ProjectileWeaponDataAsset* InWeaponDataAsset)
 {
     InstigatorPawn = InInstigatorPawn;
     SetInstigator(InInstigatorPawn); // Set AActor's Instigator
