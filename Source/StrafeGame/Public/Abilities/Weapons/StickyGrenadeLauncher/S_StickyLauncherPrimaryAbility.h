@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/Weapons/S_WeaponPrimaryAbility.h"
-#include "S_StickyGrenadeLauncherPrimaryAbility.generated.h"
+#include "S_StickyLauncherPrimaryAbility.generated.h"
 
 class US_StickyGrenadeLauncherDataAsset;
 class AS_StickyGrenadeLauncher;

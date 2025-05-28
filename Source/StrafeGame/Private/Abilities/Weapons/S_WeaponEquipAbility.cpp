@@ -4,28 +4,31 @@
 #include "Player/S_Character.h"
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
-#include "Animation/AnimMontage.h" // For UAnimMontage
+#include "Animation/AnimMontage.h" 
 
 US_WeaponEquipAbility::US_WeaponEquipAbility()
 {
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
     bActivateOnEquip = true;
-    bCancelOnUnequip = true;
-    AbilityInputID = -1;
+    bCancelOnUnequip = true; // Important for equip abilities
+    AbilityInputID = -1; // Equip abilities are not typically manually triggered by input ID
     NetSecurityPolicy = EGameplayAbilityNetSecurityPolicy::ClientOrServer;
 }
 
+// Corrected signature to match UGameplayAbility
 bool US_WeaponEquipAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, OUT FGameplayTagContainer* OptionalRelevantTags) const
 {
     if (!Super::CanActivateAbility(Handle, ActorInfo, SourceTags, TargetTags, OptionalRelevantTags))
     {
         return false;
     }
-    const AS_Weapon* EquippedWeapon = GetEquippedWeapon();
-    if (!EquippedWeapon || !EquippedWeapon->GetWeaponData()) return false;
+    const AS_Weapon* EquippedWeapon = GetEquippedWeapon(); // GetEquippedWeapon is from US_WeaponAbility (base)
+    if (!EquippedWeapon || !EquippedWeapon->GetWeaponData()) // CORRECTED: added braces and return
+    {
+        return false;
+    }
 
-    // Check if weapon is already equipped or is currently unequipping
     if (EquippedWeapon->GetCurrentWeaponState() == EWeaponState::Equipped || EquippedWeapon->GetCurrentWeaponState() == EWeaponState::Unequipping)
     {
         return false;
@@ -53,9 +56,7 @@ void US_WeaponEquipAbility::ActivateAbility(const FGameplayAbilitySpecHandle Han
         return;
     }
 
-    // Use the single montage from WeaponData (e.g., WeaponData->EquipMontage)
-    // Your US_WeaponDataAsset should now have a TSoftObjectPtr<UAnimMontage> EquipMontage;
-    EquipMontageTask = PlayWeaponMontage(WeaponData->EquipMontage); // Assuming WeaponData->EquipMontage exists
+    EquipMontageTask = PlayWeaponMontage(WeaponData->EquipMontage);
     if (EquipMontageTask)
     {
         EquipMontageTask->OnCompleted.AddDynamic(this, &US_WeaponEquipAbility::OnMontageCompleted);
@@ -65,18 +66,14 @@ void US_WeaponEquipAbility::ActivateAbility(const FGameplayAbilitySpecHandle Han
     }
     else
     {
-        // No montage, or failed to play.
-        // Play Equip Cue if it exists.
         if (WeaponData->EquipCueTag.IsValid() && ActorInfo->AbilitySystemComponent.IsValid())
         {
             FGameplayCueParameters CueParams;
-            // Populate CueParams if needed, e.g. for location/attachment
-            // CueParams.Location = Character->GetActorLocation();
             CueParams.Instigator = Character;
             CueParams.EffectCauser = GetEquippedWeapon();
             ActorInfo->AbilitySystemComponent->ExecuteGameplayCue(WeaponData->EquipCueTag, CueParams);
         }
-        EndAbility(Handle, ActorInfo, ActivationInfo, true, false); // End successfully if no montage needed
+        EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
     }
 }
 
@@ -92,7 +89,6 @@ void US_WeaponEquipAbility::EndAbility(const FGameplayAbilitySpecHandle Handle, 
 
 void US_WeaponEquipAbility::OnMontageCompleted()
 {
-    // Play Equip Cue if it exists, after montage.
     const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
     AS_Character* Character = GetOwningSCharacter();
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();

@@ -1,17 +1,17 @@
-#include "Abilities/Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncherPrimaryAbility.h"
+#include "Abilities/Weapons/StickyGrenadeLauncher/S_StickyLauncherPrimaryAbility.h"
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncher.h"
-#include "Weapons/DataAssets/StickyGrenadeLauncher/S_StickyGrenadeLauncherDataAsset.h"
+#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncherDataAsset.h" // Correct path for specific DA
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h"
 #include "Player/S_Character.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Controller.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
+#include "GameplayEffectTypes.h" 
 
 US_StickyGrenadeLauncherPrimaryAbility::US_StickyGrenadeLauncherPrimaryAbility()
 {
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
-    // AbilityInputID inherited.
 }
 
 AS_StickyGrenadeLauncher* US_StickyGrenadeLauncherPrimaryAbility::GetStickyLauncher() const
@@ -39,18 +39,14 @@ bool US_StickyGrenadeLauncherPrimaryAbility::CanActivateAbility(const FGameplayA
         return false;
     }
 
-    // Check max active projectiles
     if (Launcher->GetActiveProjectiles().Num() >= LauncherData->MaxActiveProjectiles)
     {
-        // UE_LOG(LogTemp, Warning, TEXT("US_StickyGrenadeLauncherPrimaryAbility: Max active stickies reached (%d)."), LauncherData->MaxActiveProjectiles);
-        // Optionally, add a gameplay tag for UI feedback: "Ability.Feedback.MaxProjectilesReached"
         if (OptionalRelevantTags)
         {
             // OptionalRelevantTags->AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Feedback.MaxProjectilesReached")));
         }
         return false;
     }
-    // Super::CanActivateAbility checks ammo, cooldown (0.333s rate of fire), weapon state.
     return true;
 }
 
@@ -59,25 +55,28 @@ void US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAb
     AS_Character* Character = GetOwningSCharacter();
     AS_StickyGrenadeLauncher* Launcher = GetStickyLauncher();
     const US_StickyGrenadeLauncherDataAsset* LauncherData = GetStickyLauncherData();
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 
-    if (!Character || !Launcher || !LauncherData || !LauncherData->ProjectileClass || !ActorInfo || !ActorInfo->AbilitySystemComponent.Get())
+    if (!Character || !Launcher || !LauncherData || !LauncherData->ProjectileClass || !ASC)
     {
         CancelAbility(Handle, ActorInfo, ActivationInfo, true);
         return;
     }
 
-    // 1. Get Aiming Data
     FVector FireStartLocation;
+    FRotator CamRot; // CORRECTED
     FVector FireDirection;
     AController* Controller = Character->GetController();
     if (Controller)
     {
-        FVector MuzzleSocketLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName);
-        FVector CamLoc, CamRotDir_Unused;
-        Controller->GetPlayerViewPoint(CamLoc, CamRotDir_Unused);
-        FVector CamAimDir = Controller->GetControlRotation().Vector();
-        const float MaxFireDistance = 100000.0f;
-        FVector CamTraceEnd = CamLoc + CamAimDir * MaxFireDistance;
+        FVector MuzzleSocketLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName); // CORRECTED
+        FVector CamLoc;
+        Controller->GetPlayerViewPoint(CamLoc, CamRot); // CORRECTED
+        FireDirection = CamRot.Vector();
+
+        const float MaxTraceDist = LauncherData->MaxAimTraceRange > 0.f ? LauncherData->MaxAimTraceRange : 100000.0f; // CORRECTED
+        FVector CamTraceEnd = CamLoc + FireDirection * MaxTraceDist;
+
         FHitResult CameraTraceHit;
         FCollisionQueryParams QueryParams;
         QueryParams.AddIgnoredActor(Character);
@@ -93,11 +92,13 @@ void US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAb
     }
     else
     {
-        FireStartLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName);
+        FireStartLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName); // CORRECTED
         FireDirection = Launcher->GetActorForwardVector();
     }
 
-    // 2. Play Fire Montage
+    const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED
+    Launcher->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), 0.f, 0.f, LauncherData->ProjectileClass);
+
     UAbilityTask_PlayMontageAndWait* MontageTask = PlayWeaponMontage(LauncherData->FireMontage);
     if (MontageTask)
     {
@@ -106,23 +107,25 @@ void US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAb
         MontageTask->OnCancelled.AddDynamic(this, &US_StickyGrenadeLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
         MontageTask->ReadyForActivation();
     }
+    else
+    {
+        EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+    }
 
-    // 3. Call Weapon's ExecuteFire (which calls AS_ProjectileWeapon's implementation)
-    Launcher->ExecuteFire(FireStartLocation, FireDirection, nullptr, 0.f, 0.f, LauncherData->ProjectileClass);
-
-    // 4. Trigger Muzzle Flash Cue
     if (LauncherData->MuzzleFlashCueTag.IsValid())
     {
         FGameplayCueParameters CueParams;
-        CueParams.Location = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName);
+        CueParams.Location = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName); // CORRECTED
         CueParams.Normal = FireDirection;
         CueParams.Instigator = Character;
         CueParams.EffectCauser = Launcher;
-        ActorInfo->AbilitySystemComponent->ExecuteGameplayCue(LauncherData->MuzzleFlashCueTag, CueParams);
+        ASC->ExecuteGameplayCue(LauncherData->MuzzleFlashCueTag, CueParams);
     }
 
-    if (!MontageTask) // If no montage, end immediately
+    if (!MontageTask)
     {
         EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
     }
 }
+
+// OnFireMontageCompleted and OnFireMontageInterruptedOrCancelled are inherited.

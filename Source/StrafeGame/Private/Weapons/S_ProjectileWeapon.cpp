@@ -1,7 +1,7 @@
 #include "Weapons/S_ProjectileWeapon.h"
 #include "Weapons/S_Projectile.h"         // For AS_Projectile
 #include "Player/S_Character.h"
-#include "Weapons/S_WeaponDataAsset.h"    // For getting projectile class
+#include "Weapons/S_ProjectileWeaponDataAsset.h"    // For getting projectile class
 #include "Engine/World.h"                 // For spawning
 #include "GameFramework/Controller.h"     // For AController
 
@@ -10,13 +10,13 @@ AS_ProjectileWeapon::AS_ProjectileWeapon()
     // DefaultProjectileClass = nullptr; // To be set in derived BPs or read from DataAsset by GA
 }
 
-void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData* EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClassFromAbility)
+void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClassFromAbility) // MODIFIED
 {
-    Super::ExecuteFire_Implementation(FireStartLocation, FireDirection, EventData, HitscanSpread, HitscanRange, ProjectileClassFromAbility);
+    // Pass EventData along if Super uses it.
+    // Super::ExecuteFire_Implementation(FireStartLocation, FireDirection, EventData, HitscanSpread, HitscanRange, ProjectileClassFromAbility); // MODIFIED
 
-    if (GetOwnerRole() != ROLE_Authority) // Server spawns projectiles
+    if (!HasAuthority())
     {
-        // Client might play cosmetic muzzle flash here if not handled by ability's gameplay cue
         return;
     }
 
@@ -33,11 +33,12 @@ void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLoc
         return;
     }
 
+    const US_ProjectileWeaponDataAsset* ProjWeaponData = Cast<US_ProjectileWeaponDataAsset>(GetWeaponData());
     TSubclassOf<AS_Projectile> ActualProjectileClass = ProjectileClassFromAbility;
-    // Fallback to a default from WeaponDataAsset if ability didn't provide one (though ability should be authoritative)
-    if (!ActualProjectileClass && WeaponData && WeaponData->PrimaryProjectileClass_DEPRECATED) // Assuming direct TSubclassOf on WeaponData for simplicity here
+
+    if (!ActualProjectileClass && ProjWeaponData) // Fallback to DA if ability didn't provide (shouldn't happen with new design)
     {
-        ActualProjectileClass = WeaponData->PrimaryProjectileClass_DEPRECATED;
+        ActualProjectileClass = ProjWeaponData->ProjectileClass;
     }
 
     if (!ActualProjectileClass)
@@ -47,12 +48,31 @@ void AS_ProjectileWeapon::ExecuteFire_Implementation(const FVector& FireStartLoc
     }
 
     FTransform SpawnTransform(FireDirection.Rotation(), FireStartLocation);
+    // Use ProjWeaponData for LaunchSpeed and ProjectileLifeSpan when initializing the projectile
     AS_Projectile* SpawnedProjectile = SpawnProjectile(ActualProjectileClass, SpawnTransform.GetLocation(), SpawnTransform.GetRotation().Rotator(), OwnerCharacter, InstigatorController);
 
     if (SpawnedProjectile)
     {
-        // UE_LOG(LogTemp, Log, TEXT("AS_ProjectileWeapon %s fired projectile %s"), *GetName(), *SpawnedProjectile->GetName());
+        // Initialization like speed, lifespan should happen in InitializeProjectile or be part of the projectile's defaults
+        // based on data from its DataAsset or the weapon's DataAsset.
+        // For example, the GameplayAbility would read these from the WeaponDataAsset and pass them somehow if they were dynamic per shot.
+        // Or Projectile itself reads from its own DA or defaults.
+        if (ProjWeaponData)
+        {
+            SpawnedProjectile->InitializeProjectile(OwnerCharacter, this, ProjWeaponData); // Pass weapon data
+            if (ProjWeaponData->LaunchSpeed > 0.f && SpawnedProjectile->GetProjectileMovementComponent()) {
+                SpawnedProjectile->GetProjectileMovementComponent()->InitialSpeed = ProjWeaponData->LaunchSpeed;
+                SpawnedProjectile->GetProjectileMovementComponent()->MaxSpeed = ProjWeaponData->LaunchSpeed;
+            }
+            if (ProjWeaponData->ProjectileLifeSpan > 0.f) {
+                SpawnedProjectile->SetLifeSpan(ProjWeaponData->ProjectileLifeSpan);
+            }
+        }
+        else {
+            SpawnedProjectile->InitializeProjectile(OwnerCharacter, this, GetWeaponData());
+        }
     }
+    // Muzzle flash cue should be triggered by the GameplayAbility
 }
 
 AS_Projectile* AS_ProjectileWeapon::SpawnProjectile(TSubclassOf<AS_Projectile> ProjectileClass, const FVector& SpawnLocation, const FRotator& SpawnRotation, AS_Character* InstigatorCharacter, AController* InstigatorController)

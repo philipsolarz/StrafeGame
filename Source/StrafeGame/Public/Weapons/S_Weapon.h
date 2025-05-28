@@ -2,15 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+//#include "GameplayEffectTypes.h" // For FGameplayEventData
+#include "Abilities/GameplayAbilityTypes.h"
 #include "S_Weapon.generated.h"
 
 // Forward Declarations
 class USkeletalMeshComponent;
 class US_WeaponDataAsset;
 class AS_Character;
-// AS_Projectile is forward declared here because AS_ProjectileWeapon will need it.
-// The base AS_Weapon itself won't directly use AS_Projectile.
-class AS_Projectile;
+class AS_Projectile; // Forward declare
 
 UENUM(BlueprintType)
 enum class EWeaponState : uint8
@@ -71,8 +71,8 @@ public:
      * @param ProjectileClass TSubclass of projectile to spawn. Relevant for ProjectileWeapon.
      */
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Weapon|Firing")
-    void ExecuteFire(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData* EventData, float HitscanSpread = 0.f, float HitscanRange = 10000.f, TSubclassOf<AS_Projectile> ProjectileClass = nullptr);
-    virtual void ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData* EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass);
+    void ExecuteFire(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread = 0.f, float HitscanRange = 10000.f, TSubclassOf<AS_Projectile> ProjectileClass = nullptr); // MODIFIED
+    virtual void ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass); // MODIFIED
 
 
 protected:

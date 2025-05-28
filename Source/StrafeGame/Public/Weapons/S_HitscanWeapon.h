@@ -19,7 +19,7 @@ public:
 
     //~ Begin AS_Weapon Interface
     /** Overrides base ExecuteFire to perform hitscan logic. */
-    virtual void ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData* EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass) override;
+    virtual void ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass) override;
     //~ End AS_Weapon Interface
 
 protected:

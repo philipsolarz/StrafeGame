@@ -4,16 +4,16 @@
 #include "Weapons/S_WeaponDataAsset.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Animation/AnimMontage.h"
-#include "GameFramework/Character.h"
+// #include "GameFramework/Character.h" // Already have S_Character
 
 US_WeaponAbility::US_WeaponAbility()
 {
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
-    AbilityInputID = -1;
+    AbilityInputID = -1; // Default, to be overridden
     bActivateOnEquip = false;
     bCancelOnUnequip = true;
-    NetSecurityPolicy = EGameplayAbilityNetSecurityPolicy::ClientOrServer; // Default, adjust if needed
+    NetSecurityPolicy = EGameplayAbilityNetSecurityPolicy::ClientOrServer;
 }
 
 AS_Character* US_WeaponAbility::GetOwningSCharacter() const
@@ -40,29 +40,36 @@ UAbilityTask_PlayMontageAndWait* US_WeaponAbility::PlayWeaponMontage(
     bool bStopWhenAbilityEnds)
 {
     AS_Character* SChar = GetOwningSCharacter();
-    if (!SChar || !MontageAsset.IsValid())
+    if (!SChar || !MontageAsset.IsValid()) // Use IsValid() for TSoftObjectPtr
     {
         return nullptr;
     }
 
-    UAnimMontage* MontageToPlay = MontageAsset.LoadSynchronous(); // Load if not already loaded
+    UAnimMontage* MontageToPlay = MontageAsset.LoadSynchronous();
 
     if (MontageToPlay)
     {
         UAbilityTask_PlayMontageAndWait* PlayMontageTask = UAbilityTask_PlayMontageAndWait::CreatePlayMontageAndWaitProxy(
             this,
-            NAME_None,
+            NAME_None, // InstanceName
             MontageToPlay,
             Rate,
             StartSectionName,
-            bStopWhenAbilityEnds
+            bStopWhenAbilityEnds,
+            1.0f // AnimRootMotionTranslationScale
         );
         return PlayMontageTask;
     }
     return nullptr;
 }
 
-const FGameplayAbilityActorInfo* US_WeaponAbility::GetAbilityActorInfo() const
+// MODIFIED Implementation
+FGameplayAbilityActorInfo US_WeaponAbility::GetActorInfoForBlueprint() const
 {
-    return CurrentActorInfo;
+    const FGameplayAbilityActorInfo* Info = GetCurrentActorInfo();
+    if (Info)
+    {
+        return *Info; // Return a copy
+    }
+    return FGameplayAbilityActorInfo(); // Return default-constructed if null
 }

@@ -6,13 +6,13 @@
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
 #include "GameFramework/Controller.h"
-
+#include "GameplayEffectTypes.h" // For FGameplayEventData
 
 US_WeaponSecondaryAbility::US_WeaponSecondaryAbility()
 {
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
-    AbilityInputID = 1; // Conventionally, 1 for secondary fire.
-    AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.SecondaryFire")));
+    AbilityInputID = 1;
+    AssetTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.SecondaryFire"))); // CORRECTED
 }
 
 bool US_WeaponSecondaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, OUT FGameplayTagContainer* OptionalRelevantTags) const
@@ -34,13 +34,16 @@ bool US_WeaponSecondaryAbility::CanActivateAbility(const FGameplayAbilitySpecHan
     {
         return false;
     }
-    if (!WeaponData->SecondaryFireAbilityClass) // Check if weapon actually has a secondary fire defined
+    if (!WeaponData->SecondaryFireAbilityClass)
     {
         return false;
     }
-    if (WeaponData->AmmoAttribute.IsValid() && WeaponData->AmmoCostEffect_Secondary) // Check for secondary ammo cost
+    if (WeaponData->AmmoAttribute.IsValid() && WeaponData->AmmoCostEffect_Secondary)
     {
-        if (ASC->GetNumericAttribute(WeaponData->AmmoAttribute) <= 0) // Or specific cost amount check
+        // A more precise check would be:
+        // if (ASC->GetNumericAttribute(WeaponData->AmmoAttribute) < GetAmmoCost(WeaponData->AmmoCostEffect_Secondary))
+        // For now, just checking if > 0
+        if (ASC->GetNumericAttribute(WeaponData->AmmoAttribute) <= 0)
         {
             if (WeaponData->OutOfAmmoCueTag.IsValid())
             {
@@ -66,12 +69,6 @@ void US_WeaponSecondaryAbility::ActivateAbility(const FGameplayAbilitySpecHandle
 
 void US_WeaponSecondaryAbility::PerformWeaponSecondaryFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-    // Base implementation. Derived classes will override.
-    // This might involve calling a different function on AS_Weapon, or specific tasks.
-    // For instance, a rocket launcher's secondary might detonate existing rockets.
-    // A charged shotgun's secondary is a different fire mode.
-
-    // Example: Generic secondary fire, similar to primary for now
     AS_Character* Character = GetOwningSCharacter();
     AS_Weapon* Weapon = GetEquippedWeapon();
     const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
@@ -82,29 +79,41 @@ void US_WeaponSecondaryAbility::PerformWeaponSecondaryFire(const FGameplayAbilit
         return;
     }
 
-    // Similar aiming and effect logic as primary, but could use different parameters/effects
     FVector FireStartLocation;
-    FVector FireDirection;
+    FRotator CamRot; // CORRECTED
+    FVector FireDirection; // Renamed from CamAimDir for clarity
     AController* Controller = Character->GetController();
+
     if (Controller)
     {
-        // Simplified aiming for example
-        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
+        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
+        FVector CamLoc;
+        Controller->GetPlayerViewPoint(CamLoc, CamRot); // CORRECTED
+        FireDirection = CamRot.Vector(); // Initial direction
+
+        const float MaxTraceDist = WeaponData->MaxAimTraceRange > 0.f ? WeaponData->MaxAimTraceRange : 100000.0f; // CORRECTED
+        FVector CamTraceEnd = CamLoc + FireDirection * MaxTraceDist;
+        FHitResult CameraTraceHit;
+        FCollisionQueryParams QueryParams;
+        QueryParams.AddIgnoredActor(Character);
+        QueryParams.AddIgnoredActor(Weapon);
+
         FireStartLocation = MuzzleLocation;
-        FireDirection = Controller->GetControlRotation().Vector();
+        if (GetWorld()->LineTraceSingleByChannel(CameraTraceHit, CamLoc, CamTraceEnd, ECC_Visibility, QueryParams))
+        {
+            FireDirection = (CameraTraceHit.ImpactPoint - MuzzleLocation).GetSafeNormal();
+        }
+        else {
+            FireDirection = (CamTraceEnd - MuzzleLocation).GetSafeNormal();
+        }
     }
     else
     {
-        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
+        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
         FireDirection = Weapon->GetActorForwardVector();
     }
 
-    // The secondary fire might not use the same ExecuteFire or might pass different flags/data
-    // For now, assume it *could* use ExecuteFire but potentially with different parameters
-    // that would be fetched from WeaponData's secondary fire specific fields (if they existed)
-    // or be intrinsic to the derived SecondaryFireAbility.
-    // Weapon->ExecuteFire(FireStartLocation, FireDirection, nullptr, ... );
-
+    // Base class doesn't call ExecuteFire. Derived classes like RocketLauncherSecondary will.
     UE_LOG(LogTemp, Warning, TEXT("US_WeaponSecondaryAbility::PerformWeaponSecondaryFire base called. Override in specific weapon secondary abilities."));
     EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
 }
@@ -112,11 +121,12 @@ void US_WeaponSecondaryAbility::PerformWeaponSecondaryFire(const FGameplayAbilit
 void US_WeaponSecondaryAbility::ApplyAmmoCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
     const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
-    if (WeaponData && WeaponData->AmmoCostEffect_Secondary && ActorInfo->AbilitySystemComponent.Get())
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    if (WeaponData && WeaponData->AmmoCostEffect_Secondary && ASC)
     {
-        FGameplayEffectContextHandle ContextHandle = ActorInfo->AbilitySystemComponent->MakeEffectContext();
+        FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
         ContextHandle.AddSourceObject(this);
-        FGameplayEffectSpecHandle SpecHandle = ActorInfo->AbilitySystemComponent->MakeOutgoingSpec(WeaponData->AmmoCostEffect_Secondary, GetAbilityLevel(), ContextHandle);
+        FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(WeaponData->AmmoCostEffect_Secondary, GetAbilityLevel(), ContextHandle);
         if (SpecHandle.IsValid())
         {
             ApplyGameplayEffectSpecToOwner(Handle, ActorInfo, ActivationInfo, SpecHandle);
@@ -126,6 +136,5 @@ void US_WeaponSecondaryAbility::ApplyAmmoCost(const FGameplayAbilitySpecHandle H
 
 void US_WeaponSecondaryAbility::ApplyAbilityCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-    // Similar to primary, ensure your Cooldown GE for secondary fire uses WeaponData->CooldownTag_Secondary
     Super::ApplyCooldown(Handle, ActorInfo, ActivationInfo);
 }

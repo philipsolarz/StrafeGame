@@ -1,23 +1,22 @@
 #include "Abilities/Weapons/S_WeaponPrimaryAbility.h"
 #include "Weapons/S_Weapon.h"
-#include "Weapons/S_WeaponDataAsset.h"
+#include "Weapons/S_WeaponDataAsset.h" // Base DA
+#include "Weapons/S_HitscanWeaponDataAsset.h" // For specific params if needed
+#include "Weapons/S_ProjectileWeaponDataAsset.h" // For specific params if needed
 #include "Player/S_Character.h"
-#include "Player/Attributes/S_AttributeSet.h" // For checking ammo
+#include "Player/Attributes/S_AttributeSet.h" 
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
-#include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h" // If using montages for fire
+#include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h" 
 #include "Animation/AnimMontage.h"
 #include "GameFramework/Controller.h"
+#include "GameplayEffectTypes.h" 
 
 US_WeaponPrimaryAbility::US_WeaponPrimaryAbility()
 {
-    // Defaults for a primary fire ability
-    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted; // Good for responsive shooting
-    AbilityInputID = 0; // Conventionally, 0 for primary fire. Set in BP or derived C++ if needed.
-    // This should match the InputID used by AS_Character::HandleWeaponEquipped
-
-// Add a generic "Ability.Weapon.PrimaryFire" tag to this ability
-    AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire")));
+    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+    AbilityInputID = 0;
+    AssetTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire"))); // CORRECTED
 }
 
 bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayTagContainer* SourceTags, const FGameplayTagContainer* TargetTags, OUT FGameplayTagContainer* OptionalRelevantTags) const
@@ -37,23 +36,15 @@ bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandl
         return false;
     }
 
-    // Check if weapon is in 'Equipped' state (not equipping/unequipping)
     if (EquippedWeapon->GetCurrentWeaponState() != EWeaponState::Equipped)
     {
         return false;
     }
 
-    // Check Ammo
     if (WeaponData->AmmoAttribute.IsValid())
     {
         if (ASC->GetNumericAttribute(WeaponData->AmmoAttribute) <= 0)
         {
-            if (OptionalRelevantTags && WeaponData->OutOfAmmoCueTag.IsValid())
-            {
-                // OptionalRelevantTags->AddTag(WeaponData->OutOfAmmoCueTag); // This doesn't trigger cue directly
-                // Consider sending a gameplay event or having UI react to this failure reason
-            }
-            // Trigger OutOfAmmo cue directly if that's the desired behavior on CanActivate failure
             if (WeaponData->OutOfAmmoCueTag.IsValid())
             {
                 ASC->ExecuteGameplayCue(WeaponData->OutOfAmmoCueTag, ASC->MakeEffectContext());
@@ -61,7 +52,6 @@ bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandl
             return false;
         }
     }
-    // Cooldown check is handled by UGameplayAbility::CanActivateAbility using CooldownGameplayEffectClasses or CooldownTags from GameplayEffect
     return true;
 }
 
@@ -69,30 +59,19 @@ void US_WeaponPrimaryAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
 {
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-    if (!CommitAbility(Handle, ActorInfo, ActivationInfo)) // This also applies costs and cooldowns if set up correctly
+    if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
     {
-        EndAbility(Handle, ActorInfo, ActivationInfo, true, true); // true for bWasCancelled
+        EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
         return;
     }
-
-    // Commit Succeeded (cost paid, cooldown applied if configured on ability CDO or via effect)
-    // Now perform the actual weapon fire logic
     PerformWeaponFire(Handle, ActorInfo, ActivationInfo);
-
-    // Many simple fire abilities might end immediately after firing one shot.
-    // More complex ones (charged, automatic) will have tasks or timers.
-    // For a single shot, you might end it here or after a montage.
 }
 
 void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-    // Base implementation. Derived classes will override this.
-    // Example: Play a fire montage and then call weapon's ExecuteFire on a gameplay event from montage.
-    // Or call ExecuteFire directly.
-
     AS_Character* Character = GetOwningSCharacter();
     AS_Weapon* Weapon = GetEquippedWeapon();
-    const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
+    const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData(); // This is US_WeaponDataAsset
 
     if (!Character || !Weapon || !WeaponData)
     {
@@ -100,39 +79,27 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         return;
     }
 
-    // 1. Get Aiming Data (Start location, Direction)
     FVector FireStartLocation;
-    FVector FireDirection;
+    FRotator CamRot; // CORRECTED
+    FVector CamAimDir;
+
     AController* Controller = Character->GetController();
     if (Controller)
     {
-        Controller->GetPlayerViewPoint(FireStartLocation, FireDirection); // Gets camera view
-        FireDirection = Controller->GetControlRotation().Vector(); // Use controller rotation for aim
+        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
+        FVector CamLoc;
+        Controller->GetPlayerViewPoint(CamLoc, CamRot); // CORRECTED
+        CamAimDir = CamRot.Vector();
 
-        // Adjust FireStartLocation to muzzle or a point slightly in front of camera
-        // This needs careful handling to avoid shooting through walls or self.
-        // A common approach is to trace from camera, then use muzzle for effects.
-        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
-        FireStartLocation = MuzzleLocation; // Or a trace from camera to find "true" aim point then fire from muzzle towards it
+        const float MaxTraceDist = WeaponData->MaxAimTraceRange > 0.f ? WeaponData->MaxAimTraceRange : 100000.0f; // CORRECTED
+        FVector CamTraceEnd = CamLoc + CamAimDir * MaxTraceDist;
 
-        // More robust: Trace from camera to find target, then adjust FireStartLocation to weapon muzzle
-        // and FireDirection from muzzle towards the target point.
         FHitResult CameraTraceHit;
-        FVector CamLoc, CamDir;
-        Character->GetActorEyesViewPoint(CamLoc, CamDir); // Or Controller->GetPlayerViewPoint()
-        CamDir = Controller->GetControlRotation().Vector();
-
-        const float MaxFireDistance = 100000.0f; // Large distance for camera trace
-        FVector CamTraceEnd = CamLoc + CamDir * MaxFireDistance;
-
         FCollisionQueryParams QueryParams;
         QueryParams.AddIgnoredActor(Character);
         QueryParams.AddIgnoredActor(Weapon);
 
-        // Default FireStartLocation to a point in front of the camera if no hit
-        FireStartLocation = CamLoc + CamDir * 100.0f; // Default start for effects/projectile
-        FireDirection = CamDir;
-
+        FireStartLocation = MuzzleLocation;
         if (GetWorld()->LineTraceSingleByChannel(CameraTraceHit, CamLoc, CamTraceEnd, ECC_Visibility, QueryParams))
         {
             FireDirection = (CameraTraceHit.ImpactPoint - MuzzleLocation).GetSafeNormal();
@@ -140,64 +107,79 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         else {
             FireDirection = (CamTraceEnd - MuzzleLocation).GetSafeNormal();
         }
-        FireStartLocation = MuzzleLocation;
     }
-    else // AI or no controller? Fallback.
+    else
     {
-        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
+        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
         FireDirection = Weapon->GetActorForwardVector();
     }
 
-
-    // 2. Play Fire Montage (Optional, can be part of Weapon's ExecuteFire or a GameplayCue)
     FireMontageTask = PlayWeaponMontage(WeaponData->FireMontage);
     if (FireMontageTask)
     {
         FireMontageTask->OnCompleted.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageCompleted);
         FireMontageTask->OnInterrupted.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageInterruptedOrCancelled);
         FireMontageTask->OnCancelled.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageInterruptedOrCancelled);
-        // If montage has a GameplayEvent to trigger the actual fire:
-        // FireMontageTask->EventReceived.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireEventFromMontage);
         FireMontageTask->ReadyForActivation();
-        // Actual call to Weapon->ExecuteFire() might happen on EventReceived or OnCompleted if no event.
+        // Derived abilities will call ExecuteFire. This base version might not, or only if no montage.
     }
-    else
+    else // No montage, fire directly if this base class is supposed to
     {
-        // No montage, fire immediately
-        Weapon->ExecuteFire(FireStartLocation, FireDirection, nullptr /*EventData*/, WeaponData->SpreadAngle, WeaponData->MaxRange, WeaponData->ProjectileClass_DEPRECATED); // Example, adapt params
+        // This is an example for a generic fire. Derived classes MUST provide their specific parameters.
+        float Spread = 0.f;
+        float Range = 0.f;
+        TSubclassOf<AS_Projectile> ProjClass = nullptr;
+
+        if (const US_HitscanWeaponDataAsset* HitscanData = Cast<US_HitscanWeaponDataAsset>(WeaponData))
+        {
+            Spread = HitscanData->SpreadAngle;
+            Range = HitscanData->MaxRange;
+        }
+        else if (const US_ProjectileWeaponDataAsset* ProjData = Cast<US_ProjectileWeaponDataAsset>(WeaponData))
+        {
+            ProjClass = ProjData->ProjectileClass;
+            // Range for projectile is determined by lifespan/speed
+        }
+
+        const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED: UGameplayAbility method
+        Weapon->ExecuteFire(
+            FireStartLocation,
+            FireDirection,
+            AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(),
+            Spread,
+            Range,
+            ProjClass
+        );
         EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
     }
 
-    // 3. Trigger Muzzle Flash Cue
-    if (WeaponData->MuzzleFlashCueTag.IsValid() && ActorInfo->AbilitySystemComponent.IsValid())
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    if (WeaponData->MuzzleFlashCueTag.IsValid() && ASC)
     {
         FGameplayCueParameters CueParams;
-        CueParams.Location = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
-        CueParams.Normal = FireDirection; // Or weapon forward vector
+        CueParams.Location = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
+        CueParams.Normal = FireDirection;
         CueParams.Instigator = Character;
         CueParams.EffectCauser = Weapon;
-        ActorInfo->AbilitySystemComponent->ExecuteGameplayCue(WeaponData->MuzzleFlashCueTag, CueParams);
+        ASC->ExecuteGameplayCue(WeaponData->MuzzleFlashCueTag, CueParams);
     }
 
-    // Specific logic for Hitscan vs Projectile will be in derived primary fire abilities
-    // or the weapon's ExecuteFire_Implementation.
-    // For now, this base PerformWeaponFire might just end the ability or wait for montage.
-    // If FireMontageTask is null (no montage), we should end here.
-    if (!FireMontageTask)
+    if (!FireMontageTask) // If there was no montage, we already ended, but to be safe if logic changes
     {
-        EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+        // EndAbility(Handle, ActorInfo, ActivationInfo, false, false); // Already handled
     }
 }
 
 void US_WeaponPrimaryAbility::ApplyAmmoCost(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
     const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
-    if (WeaponData && WeaponData->AmmoCostEffect_Primary && ActorInfo->AbilitySystemComponent.Get())
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    if (WeaponData && WeaponData->AmmoCostEffect_Primary && ASC)
     {
-        FGameplayEffectContextHandle ContextHandle = ActorInfo->AbilitySystemComponent->MakeEffectContext();
-        ContextHandle.AddSourceObject(this); // Ability is source of cost
+        FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
+        ContextHandle.AddSourceObject(this);
 
-        FGameplayEffectSpecHandle SpecHandle = ActorInfo->AbilitySystemComponent->MakeOutgoingSpec(WeaponData->AmmoCostEffect_Primary, GetAbilityLevel(), ContextHandle);
+        FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(WeaponData->AmmoCostEffect_Primary, GetAbilityLevel(), ContextHandle);
         if (SpecHandle.IsValid())
         {
             ApplyGameplayEffectSpecToOwner(Handle, ActorInfo, ActivationInfo, SpecHandle);
@@ -207,16 +189,7 @@ void US_WeaponPrimaryAbility::ApplyAmmoCost(const FGameplayAbilitySpecHandle Han
 
 void US_WeaponPrimaryAbility::ApplyAbilityCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-    const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
-    UGameplayEffect* CooldownGE = GetCooldownGameplayEffect(); // From UGameplayAbility
-
-    if (WeaponData && CooldownGE && ActorInfo->AbilitySystemComponent.Get())
-    {
-        // Check if CooldownTag is set in WeaponDataAsset; if so, CooldownGE should apply this tag.
-        // The UGameplayAbility::ApplyCooldown will handle applying the GE that has the CooldownTag.
-        // Ensure your Cooldown GE has a GrantedTag that matches WeaponData->CooldownTag_Primary.
-    }
-    Super::ApplyCooldown(Handle, ActorInfo, ActivationInfo); // This handles applying the CooldownGE
+    Super::ApplyCooldown(Handle, ActorInfo, ActivationInfo);
 }
 
 

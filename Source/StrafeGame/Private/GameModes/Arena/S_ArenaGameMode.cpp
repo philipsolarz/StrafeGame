@@ -2,7 +2,7 @@
 #include "GameModes/Arena/S_ArenaGameState.h" // Specific GameState
 #include "Player/S_PlayerController.h"
 #include "Player/S_Character.h"
-#include "Player/GameModes/Arena/S_ArenaPlayerState.h" // Specific PlayerState
+#include "GameModes/Arena/S_ArenaPlayerState.h" // Specific PlayerState
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h" // For setting default classes in constructor

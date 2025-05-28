@@ -8,7 +8,7 @@
 class AS_Weapon;
 class AS_Character;
 class US_WeaponDataAsset;
-class UAnimMontage; // For TSoftObjectPtr<UAnimMontage>
+class UAnimMontage;
 class UAbilityTask_PlayMontageAndWait;
 
 UCLASS(Abstract, Blueprintable)
@@ -20,7 +20,7 @@ public:
     US_WeaponAbility();
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AbilityConfig")
-    int32 AbilityInputID;
+    int32 AbilityInputID; // Should be set by specific ability CDOs or by WeaponDataAsset.
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AbilityConfig")
     bool bActivateOnEquip;
@@ -55,6 +55,6 @@ protected:
         bool bStopWhenAbilityEnds = true
     );
 
-    UFUNCTION(BlueprintPure, Category = "WeaponAbility|Context")
-    const FGameplayAbilityActorInfo* GetAbilityActorInfo() const;
+    UFUNCTION(BlueprintPure, Category = "WeaponAbility|Context") // MODIFIED
+        FGameplayAbilityActorInfo GetActorInfoForBlueprint() const; // MODIFIED from GetAbilityActorInfo to avoid clash and make intent clear
 };

@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
+// Make sure GameplayEffectTypes.h is included if FGameplayEventData is used, typically via S_Weapon.h
 
 AS_Weapon::AS_Weapon()
 {
@@ -25,7 +26,7 @@ AS_Weapon::AS_Weapon()
 void AS_Weapon::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-    DOREPLIFETIME_CONDITION(AS_Weapon, OwnerCharacter, COND_OwnerOnly); // OwnerOnly as only owner needs to know for sure, others see attachment
+    DOREPLIFETIME_CONDITION(AS_Weapon, OwnerCharacter, COND_OwnerOnly);
     DOREPLIFETIME_CONDITION(AS_Weapon, CurrentWeaponState, COND_None);
 }
 
@@ -33,14 +34,11 @@ void AS_Weapon::BeginPlay()
 {
     Super::BeginPlay();
 
-    if (WeaponData && WeaponData->WeaponMeshAsset.IsValid())
+    if (WeaponData && WeaponData->WeaponMeshAsset.IsValid()) // Check TSoftObjectPtr validity
     {
         WeaponMesh->SetSkeletalMesh(WeaponData->WeaponMeshAsset.LoadSynchronous());
     }
-    else if (WeaponData && WeaponData->WeaponMesh_DEPRECATED) // Your old direct pointer property
-    {
-        WeaponMesh->SetSkeletalMesh(WeaponData->WeaponMesh_DEPRECATED);
-    }
+    // Removed deprecated WeaponMesh_DEPRECATED logic as it's not in the new S_WeaponDataAsset.h
 }
 
 void AS_Weapon::SetOwnerCharacter(AS_Character* NewOwnerCharacter)
@@ -48,8 +46,8 @@ void AS_Weapon::SetOwnerCharacter(AS_Character* NewOwnerCharacter)
     if (HasAuthority())
     {
         OwnerCharacter = NewOwnerCharacter;
-        SetOwner(NewOwnerCharacter);
-        SetInstigator(NewOwnerCharacter);
+        SetOwner(NewOwnerCharacter); // AActor's owner
+        // SetInstigator(NewOwnerCharacter); // Set Instigator as well, if appropriate
 
         if (!OwnerCharacter && CurrentWeaponState != EWeaponState::Idle)
         {
@@ -63,10 +61,10 @@ void AS_Weapon::OnRep_OwnerCharacter()
     if (OwnerCharacter)
     {
         SetOwner(OwnerCharacter);
-        SetInstigator(OwnerCharacter);
+        // SetInstigator(OwnerCharacter);
         if (CurrentWeaponState == EWeaponState::Equipped && GetAttachParentActor() != OwnerCharacter)
         {
-            USkeletalMeshComponent* CharacterMesh = OwnerCharacter->GetMesh();
+            USkeletalMeshComponent* CharacterMesh = OwnerCharacter->GetMesh(); // Assuming standard character mesh
             if (CharacterMesh)
             {
                 FName FinalSocketName = AttachSocketName;
@@ -97,7 +95,10 @@ void AS_Weapon::Equip(AS_Character* NewOwner)
             return;
         }
         SetOwnerCharacter(NewOwner);
+        // State will be set to Equipping by the ability or inventory, then to Equipped after animation/delay
+        // For now, simplified:
         SetWeaponState(EWeaponState::Equipping);
+
 
         USkeletalMeshComponent* CharacterMesh = NewOwner->GetMesh();
         if (CharacterMesh)
@@ -110,7 +111,7 @@ void AS_Weapon::Equip(AS_Character* NewOwner)
             AttachToComponent(CharacterMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, FinalSocketName);
             SetActorHiddenInGame(false);
         }
-        SetWeaponState(EWeaponState::Equipped);
+        SetWeaponState(EWeaponState::Equipped); // Transition to Equipped state
         K2_OnEquipped();
     }
 }
@@ -119,11 +120,9 @@ void AS_Weapon::Unequip()
 {
     if (HasAuthority())
     {
-        StartUnequipEffects(); // Should trigger visual unequip process
-        SetActorHiddenInGame(true);
-        SetWeaponState(EWeaponState::Idle);
-        // OwnerCharacter is not nulled here; inventory component manages ownership.
-        // If weapon is dropped, then OwnerCharacter would be nulled.
+        StartUnequipEffects(); // Should visually start unequip
+        SetActorHiddenInGame(true); // Hide after unequip effects would finish
+        SetWeaponState(EWeaponState::Idle); // Set to idle
         K2_OnUnequipped();
     }
 }
@@ -147,6 +146,7 @@ bool AS_Weapon::IsEquipped() const
 
 void AS_Weapon::OnRep_WeaponState()
 {
+    // Client-side reactions to state changes
     switch (CurrentWeaponState)
     {
     case EWeaponState::Idle:
@@ -155,13 +155,11 @@ void AS_Weapon::OnRep_WeaponState()
         break;
     case EWeaponState::Equipping:
         SetActorHiddenInGame(false);
-        // K2_OnEquipped might be called too early if animation isn't finished.
-        // Better to have equip animation complete then set state to Equipped.
-        // For simplicity, OnRep might just ensure visibility.
+        // Equip animation might play, K2_OnEquipped will be called when state changes to Equipped
         break;
     case EWeaponState::Equipped:
         SetActorHiddenInGame(false);
-        if (OwnerCharacter && GetAttachParentActor() != OwnerCharacter)
+        if (OwnerCharacter && GetAttachParentActor() != OwnerCharacter) // Ensure attachment on client
         {
             USkeletalMeshComponent* CharacterMesh = OwnerCharacter->GetMesh();
             if (CharacterMesh)
@@ -175,6 +173,7 @@ void AS_Weapon::OnRep_WeaponState()
         break;
     case EWeaponState::Unequipping:
         K2_OnStartUnequipEffects();
+        // Actor hidden when state transitions to Idle after unequip animation/delay
         break;
     default:
         break;
@@ -188,17 +187,13 @@ void AS_Weapon::SetWeaponState(EWeaponState NewState)
         if (CurrentWeaponState != NewState)
         {
             CurrentWeaponState = NewState;
+            // Call OnRep manually on server for immediate effect & to mark for replication
             OnRep_WeaponState();
         }
     }
 }
 
-// Base implementation for ExecuteFire. Derived classes will provide specific logic.
-void AS_Weapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData* EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass)
+void AS_Weapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass) // MODIFIED
 {
-    // Base AS_Weapon does nothing by default.
-    // AS_HitscanWeapon will implement trace logic.
-    // AS_ProjectileWeapon will implement projectile spawning.
-    // This function is called by the GameplayAbility.
     UE_LOG(LogTemp, Warning, TEXT("AS_Weapon::ExecuteFire_Implementation called on base class %s. Override in derived classes."), *GetName());
 }

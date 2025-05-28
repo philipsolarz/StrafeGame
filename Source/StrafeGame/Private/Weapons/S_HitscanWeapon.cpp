@@ -1,11 +1,11 @@
 #include "Weapons/S_HitscanWeapon.h"
 #include "Player/S_Character.h"
-#include "Weapons/S_WeaponDataAsset.h" // For reading trace parameters, damage, effects, cues
+#include "Weapons/S_HitscanWeaponDataAsset.h" // For reading trace parameters, damage, effects, cues
 #include "AbilitySystemBlueprintLibrary.h" // For executing GameplayCues
 #include "AbilitySystemComponent.h"
 #include "Kismet/GameplayStatics.h"
-#include "NiagaraFunctionLibrary.h"
-#include "NiagaraComponent.h"
+//#include "NiagaraFunctionLibrary.h"
+//#include "NiagaraComponent.h"
 #include "DrawDebugHelpers.h" // For debug traces
 #include "GameplayTagsManager.h" // For FGameplayTag
 #include "GameFramework/DamageType.h" // For UDamageType
@@ -16,13 +16,13 @@ AS_HitscanWeapon::AS_HitscanWeapon()
     // DamageTypeClass = UDamageType::StaticClass();
 }
 
-void AS_HitscanWeapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData* EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass)
+void AS_HitscanWeapon::ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass) // MODIFIED
 {
-    Super::ExecuteFire_Implementation(FireStartLocation, FireDirection, EventData, HitscanSpread, HitscanRange, ProjectileClass);
+    // Pass EventData along if Super uses it, or use it here.
+    // Super::ExecuteFire_Implementation(FireStartLocation, FireDirection, EventData, HitscanSpread, HitscanRange, ProjectileClass); // MODIFIED
 
-    if (GetOwnerRole() != ROLE_Authority) // Server performs traces and applies damage
+    if (!HasAuthority())
     {
-        // Client might play cosmetic muzzle flash here if not handled by ability's gameplay cue
         return;
     }
 
@@ -39,57 +39,43 @@ void AS_HitscanWeapon::ExecuteFire_Implementation(const FVector& FireStartLocati
         return;
     }
 
-    const US_WeaponDataAsset* CurrentWeaponData = GetWeaponData();
-    if (!CurrentWeaponData)
+    const US_HitscanWeaponDataAsset* HitscanData = Cast<US_HitscanWeaponDataAsset>(GetWeaponData());
+    if (!HitscanData)
     {
-        UE_LOG(LogTemp, Error, TEXT("AS_HitscanWeapon::ExecuteFire: WeaponData is null for %s."), *GetName());
+        UE_LOG(LogTemp, Error, TEXT("AS_HitscanWeapon::ExecuteFire: WeaponData is not US_HitscanWeaponDataAsset for %s."), *GetName());
         return;
     }
 
-    // Parameters from WeaponDataAsset (or passed in by ability if ability modifies them)
-    // For a shotgun, PelletCount would be > 1. This loop would run PelletCount times.
-    // The HitscanSpread and HitscanRange are passed in, potentially from the WeaponDataAsset via the Ability.
-    // BaseDamage also comes from WeaponDataAsset, usually applied within the GameplayAbility or here if GA delegates damage.
-
-    int32 PelletCount = 1; // Default to 1 for a rifle-like weapon. Shotguns override this.
-    // This should ideally be configured in the WeaponDataAsset or passed by the GA.
-    float DamagePerPellet = 20.f; // From WeaponDataAsset or GA
-    TSubclassOf<UDamageType> DamageType = UDamageType::StaticClass(); // From WeaponDataAsset or GA
-
-    // Example: Reading pellet count from WeaponDataAsset if it exists there for this weapon type
-    // if (CurrentWeaponData->WeaponStats.IsA(FHitscanWeaponStats::StaticStruct()) ) // pseudo-code for checking stats type
-    // {
-    //     const FHitscanWeaponStats* HitscanStats = CurrentWeaponData->GetStats<FHitscanWeaponStats>();
-    //     PelletCount = HitscanStats->PelletCount;
-    //     DamagePerPellet = HitscanStats->DamagePerPellet;
-    // }
+    int32 FinalPelletCount = HitscanData->PelletCount > 0 ? HitscanData->PelletCount : 1;
+    float FinalHitscanRange = HitscanRange > 0 ? HitscanRange : HitscanData->MaxRange; // Use passed-in if valid, else from DA
+    float FinalSpreadAngle = HitscanSpread >= 0 ? HitscanSpread : HitscanData->SpreadAngle; // Use passed-in if valid, else from DA
 
 
-    for (int32 i = 0; i < PelletCount; ++i)
+    for (int32 i = 0; i < FinalPelletCount; ++i)
     {
         FHitResult HitResult;
-        FVector AppliedFireDirection; // The actual direction after spread
-        bool bHit = PerformTrace(FireStartLocation, FireDirection, HitscanRange, HitscanSpread, HitResult, AppliedFireDirection);
+        FVector AppliedFireDirection;
+        bool bHit = PerformTrace(FireStartLocation, FireDirection, FinalHitscanRange, FinalSpreadAngle, HitResult, AppliedFireDirection);
 
         if (bHit)
         {
             ProcessHit(HitResult, AppliedFireDirection, OwnerCharacter, InstigatorController);
-            PlayImpactEffects(HitResult.ImpactPoint, &HitResult, true);
+            // PlayImpactEffects is now preferably handled by GameplayCue from the Ability
         }
         else
         {
-            PlayImpactEffects(FireStartLocation + AppliedFireDirection * HitscanRange, nullptr, false);
+            // PlayImpactEffects for trace miss is also preferably handled by GameplayCue
         }
 
-        // Debug drawing
 #if ENABLE_DRAW_DEBUG
-        if (GetWorld()->GetNetMode() != NM_DedicatedServer)
+        if (GetWorld()->GetNetMode() != NM_DedicatedServer) // Avoid drawing on dedicated server
         {
-            DrawDebugLine(GetWorld(), FireStartLocation, bHit ? HitResult.ImpactPoint : (FireStartLocation + AppliedFireDirection * HitscanRange), FColor::Red, false, 1.0f, 0, 0.5f);
+            DrawDebugLine(GetWorld(), FireStartLocation, bHit ? HitResult.ImpactPoint : (FireStartLocation + AppliedFireDirection * FinalHitscanRange), FColor::Red, false, 1.0f, 0, 0.5f);
             if (bHit) DrawDebugSphere(GetWorld(), HitResult.ImpactPoint, 5.f, 8, FColor::Yellow, false, 1.0f);
         }
 #endif
     }
+    // Muzzle flash cue should be triggered by the GameplayAbility
 }
 
 bool AS_HitscanWeapon::PerformTrace(const FVector& TraceStart, const FVector& AimDirection, float MaxRange, float SpreadAngle, FHitResult& OutHitResult, FVector& SpreadAppliedDirection)

@@ -1,17 +1,18 @@
 #include "Abilities/Weapons/ChargedShotgun/S_ChargedShotgunSecondaryAbility.h"
 #include "Weapons/ChargedShotgun/S_ChargedShotgun.h"
-#include "Weapons/ChargedShotgun/S_ChargedShotgunDataAsset.h" // You'll need to create this
+#include "Weapons/ChargedShotgun/S_ChargedShotgunDataAsset.h" 
 #include "Player/S_Character.h"
 #include "AbilitySystemComponent.h"
 #include "Abilities/Tasks/AbilityTask_WaitDelay.h"
 #include "Abilities/Tasks/AbilityTask_WaitInputRelease.h"
 #include "GameplayTagContainer.h"
 #include "GameFramework/Controller.h"
+#include "GameplayEffectTypes.h" 
 
 US_ChargedShotgunSecondaryAbility::US_ChargedShotgunSecondaryAbility()
 {
     InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
-    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted; // Or ServerInitiated if charge state is complex server-side
+    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 
     ChargeInProgressTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.Charging.Secondary.Shotgun"));
     OverchargedStateTag = FGameplayTag::RequestGameplayTag(FName("State.Weapon.Overcharged.Secondary.Shotgun"));
@@ -38,11 +39,11 @@ bool US_ChargedShotgunSecondaryAbility::CanActivateAbility(const FGameplayAbilit
         return false;
     }
     const US_ChargedShotgunDataAsset* ShotgunData = GetChargedShotgunData();
-    if (!ShotgunData || !ShotgunData->SecondaryFireLockoutTag.IsValid()) return true; // No lockout tag defined, allow activation
+    if (!ShotgunData || !ShotgunData->SecondaryFireLockoutTag.IsValid()) return true;
 
-    if (ActorInfo->AbilitySystemComponent->HasMatchingGameplayTag(ShotgunData->SecondaryFireLockoutTag))
+    if (ActorInfo->AbilitySystemComponent.IsValid() && ActorInfo->AbilitySystemComponent->HasMatchingGameplayTag(ShotgunData->SecondaryFireLockoutTag))
     {
-        return false; // Cannot activate if locked out
+        return false;
     }
     return true;
 }
@@ -50,13 +51,6 @@ bool US_ChargedShotgunSecondaryAbility::CanActivateAbility(const FGameplayAbilit
 void US_ChargedShotgunSecondaryAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
-
-    if (!HasEnoughResourcesToActivate())
-    {
-        CancelAbility(Handle, ActorInfo, ActivationInfo, true);
-        return;
-    }
-
     ResetAbilityState();
 
     WaitInputReleaseTask = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true);
@@ -78,7 +72,7 @@ void US_ChargedShotgunSecondaryAbility::StartSecondaryCharge()
     if (bIsCharging || bOverchargedShotStored) return;
 
     bIsCharging = true;
-    bInputReleasedDuringChargeAttempt = false; // Reset this at charge start
+    bInputReleasedDuringChargeAttempt = false;
 
     AS_ChargedShotgun* Shotgun = GetChargedShotgun();
     const US_ChargedShotgunDataAsset* ShotgunData = GetChargedShotgunData();
@@ -89,8 +83,9 @@ void US_ChargedShotgunSecondaryAbility::StartSecondaryCharge()
         return;
     }
 
-    if (ChargeInProgressTag.IsValid()) GetAbilitySystemComponentFromActorInfo()->AddLooseGameplayTag(ChargeInProgressTag);
-    if (ShotgunData->SecondaryChargeStartCue.IsValid()) GetAbilitySystemComponentFromActorInfo()->ExecuteGameplayCue(ShotgunData->SecondaryChargeStartCue, GetAbilitySystemComponentFromActorInfo()->MakeEffectContext());
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    if (ChargeInProgressTag.IsValid() && ASC) ASC->AddLooseGameplayTag(ChargeInProgressTag);
+    if (ShotgunData->SecondaryChargeStartCue.IsValid() && ASC) ASC->ExecuteGameplayCue(ShotgunData->SecondaryChargeStartCue, ASC->MakeEffectContext());
     Shotgun->K2_OnSecondaryChargeStart();
 
     ChargeTimerTask = UAbilityTask_WaitDelay::WaitDelay(this, ShotgunData->SecondaryChargeTime);
@@ -107,58 +102,53 @@ void US_ChargedShotgunSecondaryAbility::StartSecondaryCharge()
 
 void US_ChargedShotgunSecondaryAbility::OnSecondaryChargeComplete()
 {
-    if (!bIsCharging) return; // Could have been cancelled
+    if (!bIsCharging) return;
 
     bIsCharging = false;
-    if (ChargeInProgressTag.IsValid()) GetAbilitySystemComponentFromActorInfo()->RemoveLooseGameplayTag(ChargeInProgressTag);
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
+    if (ChargeInProgressTag.IsValid() && ASC) ASC->RemoveLooseGameplayTag(ChargeInProgressTag);
 
     AS_ChargedShotgun* Shotgun = GetChargedShotgun();
     const US_ChargedShotgunDataAsset* ShotgunData = GetChargedShotgunData();
 
-    if (bInputReleasedDuringChargeAttempt) // If input was released *while* the charge timer was ticking
+    if (bInputReleasedDuringChargeAttempt)
     {
-        // No penalty, just end. This path means player let go before charge finished.
         if (Shotgun) Shotgun->K2_OnSecondaryChargeCancelled();
-        EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), false, true); // true for cancelled
+        EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), false, true);
         return;
     }
 
-    // Charge finished successfully
     bOverchargedShotStored = true;
-    if (OverchargedStateTag.IsValid()) GetAbilitySystemComponentFromActorInfo()->AddLooseGameplayTag(OverchargedStateTag);
-    if (ShotgunData && ShotgunData->SecondaryChargeHeldCue.IsValid()) GetAbilitySystemComponentFromActorInfo()->ExecuteGameplayCue(ShotgunData->SecondaryChargeHeldCue, GetAbilitySystemComponentFromActorInfo()->MakeEffectContext());
+    if (OverchargedStateTag.IsValid() && ASC) ASC->AddLooseGameplayTag(OverchargedStateTag);
+    if (ShotgunData && ShotgunData->SecondaryChargeHeldCue.IsValid() && ASC) ASC->ExecuteGameplayCue(ShotgunData->SecondaryChargeHeldCue, ASC->MakeEffectContext());
     if (Shotgun) Shotgun->K2_OnSecondaryChargeHeld();
-
-    // Now we wait for input release via the WaitInputReleaseTask / InputReleased override.
-    // If input is already released by now (very fast tap), InputReleased might handle it.
 }
 
 void US_ChargedShotgunSecondaryAbility::InputReleased(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
     Super::InputReleased(Handle, ActorInfo, ActivationInfo);
 
-    if (bIsCharging) // If input released *during* the charge phase
+    if (bIsCharging)
     {
-        bInputReleasedDuringChargeAttempt = true; // Mark that input was released. OnSecondaryChargeComplete will check this.
-        // No immediate penalty, just let the charge timer run out or handle in OnSecondaryChargeComplete.
-        // If the ability should end immediately on early release (no charge stored):
-        // {
-        //     AS_ChargedShotgun* Shotgun = GetChargedShotgun();
-        //     if(Shotgun) Shotgun->K2_OnSecondaryChargeCancelled();
-        //     EndAbility(Handle, ActorInfo, ActivationInfo, false, true); // true for cancelled
-        // }
-        // For now, we let OnSecondaryChargeComplete decide based on this flag.
+        bInputReleasedDuringChargeAttempt = true;
         return;
     }
 
-    if (bOverchargedShotStored) // If input released *after* charge was stored
+    if (bOverchargedShotStored)
     {
-        AttemptFireOverchargedShot();
-        // EndAbility is called within AttemptFireOverchargedShot or after it
+        if (CommitAbility(Handle, ActorInfo, ActivationInfo))
+        {
+            AttemptFireOverchargedShot();
+        }
+        else
+        {
+            AS_ChargedShotgun* Shotgun = GetChargedShotgun();
+            if (Shotgun) Shotgun->K2_OnSecondaryChargeCancelled();
+            CancelAbility(Handle, ActorInfo, ActivationInfo, true);
+        }
     }
     else
     {
-        // Input released but not charging and no shot stored (e.g. released before charge started if activation was slow)
         EndAbility(Handle, ActorInfo, ActivationInfo, false, true);
     }
 }
@@ -170,32 +160,31 @@ void US_ChargedShotgunSecondaryAbility::AttemptFireOverchargedShot()
     AS_Character* Character = GetOwningSCharacter();
     AS_ChargedShotgun* Weapon = GetChargedShotgun();
     const US_ChargedShotgunDataAsset* WeaponData = GetChargedShotgunData();
+    UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 
-    if (!Character || !Weapon || !WeaponData || !GetAbilityActorInfo())
+    if (!Character || !Weapon || !WeaponData || !ASC)
     {
         CancelAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true);
         return;
     }
 
-    // 1. Apply Ammo Cost
-    Super::ApplyAmmoCost(GetCurrentAbilitySpecHandle(), GetAbilityActorInfo(), GetCurrentActivationInfo()); // Uses WeaponData->AmmoCostEffect_Secondary
-
-    // 2. Apply Lockout Cooldown
+    Super::ApplyAmmoCost(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo());
     ApplyWeaponLockoutCooldown();
 
-    // 3. Fire Logic (similar to primary, but using secondary parameters)
     FVector FireStartLocation;
+    FRotator CamRot; // CORRECTED
     FVector FireDirection;
     AController* Controller = Character->GetController();
     if (Controller)
     {
-        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
+        FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
+        FVector CamLoc;
+        Controller->GetPlayerViewPoint(CamLoc, CamRot); // CORRECTED
+        FireDirection = CamRot.Vector();
+
+        const float MaxFireDistance = WeaponData->SecondaryFireHitscanRange;
+        FVector CamTraceEnd = CamLoc + FireDirection * MaxFireDistance;
         FHitResult CameraTraceHit;
-        FVector CamLoc, CamDir;
-        Controller->GetPlayerViewPoint(CamLoc, CamDir);
-        CamDir = Controller->GetControlRotation().Vector();
-        const float MaxFireDistance = WeaponData->SecondaryFireHitscanRange; // Use specific range
-        FVector CamTraceEnd = CamLoc + CamDir * MaxFireDistance;
         FCollisionQueryParams QueryParams;
         QueryParams.AddIgnoredActor(Character);
         QueryParams.AddIgnoredActor(Weapon);
@@ -209,17 +198,20 @@ void US_ChargedShotgunSecondaryAbility::AttemptFireOverchargedShot()
         }
     }
     else {
-        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
+        FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName); // CORRECTED
         FireDirection = Weapon->GetActorForwardVector();
     }
 
-    Weapon->ExecuteFire(FireStartLocation, FireDirection, nullptr, WeaponData->SecondaryFireSpreadAngle, WeaponData->SecondaryFireHitscanRange, nullptr);
+    const FGameplayEventData* AbilityTriggerData = GetAbilityTriggerData(); // CORRECTED
+    Weapon->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), WeaponData->SecondaryFireSpreadAngle, WeaponData->SecondaryFireHitscanRange, nullptr);
 
-    if (WeaponData->MuzzleFlashCueTag.IsValid()) GetAbilitySystemComponentFromActorInfo()->ExecuteGameplayCue(WeaponData->MuzzleFlashCueTag, GetAbilitySystemComponentFromActorInfo()->MakeEffectContext());
+    if (WeaponData->SecondaryOverchargedFireCue.IsValid()) ASC->ExecuteGameplayCue(WeaponData->SecondaryOverchargedFireCue, ASC->MakeEffectContext());
+    else if (WeaponData->MuzzleFlashCueTag.IsValid()) ASC->ExecuteGameplayCue(WeaponData->MuzzleFlashCueTag, ASC->MakeEffectContext());
+
     Weapon->K2_OnSecondaryChargeReleased();
 
     bOverchargedShotStored = false;
-    if (OverchargedStateTag.IsValid()) GetAbilitySystemComponentFromActorInfo()->RemoveLooseGameplayTag(OverchargedStateTag);
+    if (OverchargedStateTag.IsValid()) ASC->RemoveLooseGameplayTag(OverchargedStateTag);
 
     EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), false, false);
 }
@@ -229,7 +221,7 @@ void US_ChargedShotgunSecondaryAbility::ApplyWeaponLockoutCooldown()
     const US_ChargedShotgunDataAsset* ShotgunData = GetChargedShotgunData();
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
 
-    if (ShotgunData && ShotgunData->SecondaryFireLockoutEffect && ASC) // Assuming SecondaryFireLockoutEffect is on DataAsset
+    if (ShotgunData && ShotgunData->SecondaryFireLockoutEffect && ASC)
     {
         FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
         ContextHandle.AddSourceObject(this);

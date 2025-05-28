@@ -1,14 +1,14 @@
-#include "Abilities/Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncherSecondaryAbility.h"
+#include "Abilities/Weapons/StickyGrenadeLauncher/S_StickyLauncherSecondaryAbility.h"
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncher.h"
-#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h" // For checking active projectiles
+#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h" 
+#include "Weapons/S_Projectile.h" // For AS_Projectile base class
 #include "Player/S_Character.h"
 #include "AbilitySystemComponent.h"
 
 US_StickyGrenadeLauncherSecondaryAbility::US_StickyGrenadeLauncherSecondaryAbility()
 {
-    InstancingPolicy = EGameplayAbilityInstancingPolicy::NonInstanced;
-    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated; // Detonation is server-authoritative
-    // No cooldown, no ammo cost.
+    InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor; // CORRECTED from NonInstanced due to warning
+    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated;
 }
 
 AS_StickyGrenadeLauncher* US_StickyGrenadeLauncherSecondaryAbility::GetStickyLauncher() const
@@ -29,11 +29,11 @@ bool US_StickyGrenadeLauncherSecondaryAbility::CanActivateAbility(const FGamepla
         return false;
     }
 
-    // Check if there are any active stickies to detonate
     bool bHasActiveStickies = false;
     for (const AS_Projectile* Proj : Launcher->GetActiveProjectiles())
     {
-        if (Proj && Cast<AS_StickyGrenadeProjectile>(Proj) && !Proj->IsPendingKill())
+        // Check if it's a sticky grenade and not pending kill
+        if (Proj && Cast<AS_StickyGrenadeProjectile>(Proj) && !Proj->IsPendingKill()) // IsPendingKill is AActor method
         {
             bHasActiveStickies = true;
             break;
@@ -45,10 +45,10 @@ bool US_StickyGrenadeLauncherSecondaryAbility::CanActivateAbility(const FGamepla
 void US_StickyGrenadeLauncherSecondaryAbility::PerformWeaponSecondaryFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
     AS_StickyGrenadeLauncher* Launcher = GetStickyLauncher();
-    if (Launcher && ActorInfo->IsNetAuthority()) // Server-authoritative action
+    if (Launcher && ActorInfo->IsNetAuthority())
     {
         Launcher->DetonateOldestActiveSticky();
     }
 
-    EndAbility(Handle, ActorInfo, ActivationInfo, false, false); // Single action, end immediately
+    EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
 }

@@ -1,16 +1,13 @@
 #include "Abilities/Weapons/RocketLauncher/S_RocketLauncherSecondaryAbility.h"
 #include "Weapons/RocketLauncher/S_RocketLauncher.h"
-#include "Weapons/RocketLauncher/S_RocketProjectile.h" // For checking active projectiles
+#include "Weapons/S_Projectile.h" // For AS_Projectile
 #include "Player/S_Character.h"
-#include "AbilitySystemComponent.h" // For ActorInfo
+#include "AbilitySystemComponent.h" 
 
 US_RocketLauncherSecondaryAbility::US_RocketLauncherSecondaryAbility()
 {
-    InstancingPolicy = EGameplayAbilityInstancingPolicy::NonInstanced; // Simple, one-off action
-    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated; // Detonation is server-authoritative
-    // AbilityInputID is inherited.
-    // No cooldown as per description.
-    // No ammo cost.
+    InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor; // CORRECTED from NonInstanced due to warning
+    NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated;
 }
 
 AS_RocketLauncher* US_RocketLauncherSecondaryAbility::GetRocketLauncher() const
@@ -31,11 +28,10 @@ bool US_RocketLauncherSecondaryAbility::CanActivateAbility(const FGameplayAbilit
         return false;
     }
 
-    // Check if there are any active rockets to detonate
     bool bHasActiveRockets = false;
     for (const AS_Projectile* Proj : Launcher->GetActiveProjectiles())
     {
-        if (Proj && !Proj->IsPendingKill()) // Check if it's a valid, live projectile
+        if (Proj && !Proj->IsPendingKill()) // IsPendingKill is AActor method
         {
             bHasActiveRockets = true;
             break;
@@ -47,11 +43,9 @@ bool US_RocketLauncherSecondaryAbility::CanActivateAbility(const FGameplayAbilit
 void US_RocketLauncherSecondaryAbility::PerformWeaponSecondaryFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
     AS_RocketLauncher* Launcher = GetRocketLauncher();
-    if (Launcher && ActorInfo->IsNetAuthority()) // Ensure this runs on server
+    if (Launcher && ActorInfo->IsNetAuthority())
     {
         Launcher->DetonateOldestActiveRocket();
     }
-
-    // This ability is a single action, so end it immediately.
     EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
 }
