@@ -1,8 +1,9 @@
+// Source/StrafeGame/Private/Player/S_Character.cpp
 #include "Player/S_Character.h"
 #include "InputMappingContext.h"
-#include "Player/S_PlayerState.h" // Include S_PlayerState
+#include "Player/S_PlayerState.h" 
 #include "Player/Components/S_WeaponInventoryComponent.h"
-#include "Player/Components/S_CharacterMovementComponent.h" // Your custom CMC
+#include "Player/Components/S_CharacterMovementComponent.h" 
 #include "Weapons/S_Weapon.h"
 #include "Weapons/S_WeaponDataAsset.h"
 #include "Abilities/Weapons/S_WeaponPrimaryAbility.h" 
@@ -28,11 +29,10 @@ AS_Character::AS_Character(const FObjectInitializer& ObjectInitializer)
     PrimaryActorTick.bCanEverTick = true;
     bHasInitializedWithPlayerState = false;
 
-    // Create FirstPersonCameraComponent
     FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCameraComponent"));
-    FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent()); // Attach to capsule
-    FirstPersonCameraComponent->SetRelativeLocation(FVector(-10.f, 0.f, 60.f)); // Adjust as needed for FPS view
-    FirstPersonCameraComponent->bUsePawnControlRotation = true; // Camera rotates with controller pitch/yaw
+    FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
+    FirstPersonCameraComponent->SetRelativeLocation(FVector(-10.f, 0.f, 60.f));
+    FirstPersonCameraComponent->bUsePawnControlRotation = true;
 
     WeaponInventoryComponent = CreateDefaultSubobject<US_WeaponInventoryComponent>(TEXT("WeaponInventoryComponent"));
     WeaponInventoryComponent->SetIsReplicated(true);
@@ -44,11 +44,13 @@ AS_Character::AS_Character(const FObjectInitializer& ObjectInitializer)
     GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
     bUseControllerRotationYaw = true;
     bUseControllerRotationPitch = true;
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::AS_Character: Constructor for %s"), *GetNameSafe(this));
 }
 
 void AS_Character::PostInitializeComponents()
 {
     Super::PostInitializeComponents();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::PostInitializeComponents: %s"), *GetNameSafe(this));
     if (WeaponInventoryComponent)
     {
         WeaponInventoryComponent->OnWeaponEquippedDelegate.AddDynamic(this, &AS_Character::HandleWeaponEquipped);
@@ -58,17 +60,19 @@ void AS_Character::PostInitializeComponents()
 void AS_Character::BeginPlay()
 {
     Super::BeginPlay();
-    // Add input mapping context for locally controlled players
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::BeginPlay: %s"), *GetNameSafe(this));
     if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
     {
         if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
         {
             if (DefaultMappingContext)
             {
+                UE_LOG(LogTemp, Log, TEXT("AS_Character::BeginPlay: %s - Adding DefaultMappingContext"), *GetNameSafe(this));
                 Subsystem->AddMappingContext(DefaultMappingContext, 0);
             }
             if (WeaponMappingContext)
             {
+                UE_LOG(LogTemp, Log, TEXT("AS_Character::BeginPlay: %s - Adding WeaponMappingContext"), *GetNameSafe(this));
                 Subsystem->AddMappingContext(WeaponMappingContext, 1);
             }
         }
@@ -83,6 +87,7 @@ void AS_Character::Tick(float DeltaTime)
 void AS_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
     Super::SetupPlayerInputComponent(PlayerInputComponent);
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::SetupPlayerInputComponent: %s"), *GetNameSafe(this));
     if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
     {
         if (MoveAction) EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AS_Character::Input_Move);
@@ -104,6 +109,7 @@ void AS_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         }
         if (NextWeaponAction) EnhancedInputComponent->BindAction(NextWeaponAction, ETriggerEvent::Started, this, &AS_Character::Input_NextWeapon);
         if (PreviousWeaponAction) EnhancedInputComponent->BindAction(PreviousWeaponAction, ETriggerEvent::Started, this, &AS_Character::Input_PreviousWeapon);
+        UE_LOG(LogTemp, Log, TEXT("AS_Character::SetupPlayerInputComponent: %s - Enhanced input bindings complete."), *GetNameSafe(this));
     }
 }
 
@@ -123,17 +129,20 @@ US_AttributeSet* AS_Character::GetPlayerAttributeSet() const
 void AS_Character::PossessedBy(AController* NewController)
 {
     Super::PossessedBy(NewController);
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::PossessedBy: %s possessed by %s. IsServer: %d"), *GetNameSafe(this), *GetNameSafe(NewController), HasAuthority());
     InitializeWithPlayerState();
 }
 
 void AS_Character::OnRep_Controller()
 {
     Super::OnRep_Controller();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::OnRep_Controller: %s new controller %s. IsClient: %d"), *GetNameSafe(this), *GetNameSafe(GetController()), !HasAuthority());
 }
 
 void AS_Character::OnRep_PlayerState()
 {
     Super::OnRep_PlayerState();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::OnRep_PlayerState: %s new PlayerState %s. IsClient: %d"), *GetNameSafe(this), *GetNameSafe(GetPlayerState()), !HasAuthority());
     InitializeWithPlayerState();
 }
 
@@ -142,47 +151,54 @@ void AS_Character::InitializeWithPlayerState()
     if (bHasInitializedWithPlayerState) return;
 
     AS_PlayerState* PS = GetPlayerState<AS_PlayerState>();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::InitializeWithPlayerState: %s - PlayerState: %s. HasAuthority: %d"), *GetNameSafe(this), *GetNameSafe(PS), HasAuthority());
     if (PS)
     {
         UAbilitySystemComponent* ASC = PS->GetAbilitySystemComponent();
         if (ASC)
         {
+            UE_LOG(LogTemp, Log, TEXT("AS_Character::InitializeWithPlayerState: %s - ASC found, initializing ActorInfo."), *GetNameSafe(this));
             ASC->InitAbilityActorInfo(PS, this);
 
             BindToPlayerStateAttributes();
 
             if (WeaponInventoryComponent)
             {
+                UE_LOG(LogTemp, Log, TEXT("AS_Character::InitializeWithPlayerState: %s - Initial HandleWeaponEquipped call."), *GetNameSafe(this));
                 HandleWeaponEquipped(WeaponInventoryComponent->GetCurrentWeapon(), nullptr);
             }
 
             bHasInitializedWithPlayerState = true;
-            UE_LOG(LogTemp, Log, TEXT("S_Character %s initialized with PlayerState %s."), *GetName(), *PS->GetName());
+            UE_LOG(LogTemp, Log, TEXT("S_Character %s initialized with PlayerState %s. bHasInitializedWithPlayerState = true"), *GetName(), *PS->GetName());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("AS_Character::InitializeWithPlayerState: %s - PlayerState %s has no AbilitySystemComponent."), *GetNameSafe(this), *GetNameSafe(PS));
         }
     }
 }
 
 void AS_Character::BindToPlayerStateAttributes()
 {
-    AS_PlayerState* PS = GetPlayerState<AS_PlayerState>();
-    if (PS)
-    {
-        // Attribute change delegates are primarily handled within S_PlayerState.
-    }
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::BindToPlayerStateAttributes: %s - (Currently empty, delegates handled in PlayerState)"), *GetNameSafe(this));
 }
 
 
 void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeapon)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - NewWeapon: %s, OldWeapon: %s. ASC Valid: %d. HasAuthority: %d"), 
+         *GetNameSafe(this), *GetNameSafe(NewWeapon), *GetNameSafe(OldWeapon), ASC != nullptr, HasAuthority());
+
     if (!ASC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: PlayerASC is null for %s."), *GetName());
+        UE_LOG(LogTemp, Warning, TEXT("AS_Character::HandleWeaponEquipped: PlayerASC is null for %s. Cannot manage weapon abilities."), *GetNameSafe(this));
         return;
     }
 
     if (HasAuthority())
     {
+        UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped (Server): %s - Clearing %d old weapon ability handles."), *GetNameSafe(this), CurrentWeaponAbilityHandles.Num());
         for (const FGameplayAbilitySpecHandle& Handle : CurrentWeaponAbilityHandles)
         {
             ASC->ClearAbility(Handle);
@@ -195,24 +211,29 @@ void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeap
 
     if (NewWeapon)
     {
+        UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - Processing new weapon %s."), *GetNameSafe(this), *NewWeapon->GetName());
         const US_WeaponDataAsset* WeaponData = NewWeapon->GetWeaponData();
         if (WeaponData)
         {
+            UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - WeaponData found for %s: %s."), *GetNameSafe(this), *NewWeapon->GetName(), *WeaponData->GetName());
             if (WeaponData->PrimaryFireAbilityClass)
             {
                 if (US_WeaponPrimaryAbility* AbilityCDO = Cast<US_WeaponPrimaryAbility>(WeaponData->PrimaryFireAbilityClass->GetDefaultObject()))
                 {
                     CurrentPrimaryAbilityInputID = AbilityCDO->AbilityInputID;
+                    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - Primary Ability InputID set to %d for %s."), *GetNameSafe(this), CurrentPrimaryAbilityInputID, *WeaponData->PrimaryFireAbilityClass->GetName());
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: PrimaryFireAbilityClass CDO for %s is not of expected type S_WeaponPrimaryAbility or derived."), *WeaponData->GetName());
+                    UE_LOG(LogTemp, Warning, TEXT("AS_Character::HandleWeaponEquipped: PrimaryFireAbilityClass CDO for %s is not S_WeaponPrimaryAbility."), *WeaponData->GetName());
                 }
 
                 if (HasAuthority())
                 {
                     FGameplayAbilitySpec Spec(WeaponData->PrimaryFireAbilityClass, 1, CurrentPrimaryAbilityInputID, NewWeapon);
-                    CurrentWeaponAbilityHandles.Add(ASC->GiveAbility(Spec));
+                    FGameplayAbilitySpecHandle NewHandle = ASC->GiveAbility(Spec);
+                    CurrentWeaponAbilityHandles.Add(NewHandle);
+                    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped (Server): %s - Granted Primary Ability %s. Handle: %s"), *GetNameSafe(this), *WeaponData->PrimaryFireAbilityClass->GetName(), *NewHandle.ToString());
                 }
             }
 
@@ -221,19 +242,30 @@ void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeap
                 if (US_WeaponSecondaryAbility* AbilityCDO = Cast<US_WeaponSecondaryAbility>(WeaponData->SecondaryFireAbilityClass->GetDefaultObject()))
                 {
                     CurrentSecondaryAbilityInputID = AbilityCDO->AbilityInputID;
+                    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - Secondary Ability InputID set to %d for %s."), *GetNameSafe(this), CurrentSecondaryAbilityInputID, *WeaponData->SecondaryFireAbilityClass->GetName());
                 }
                 else
                 {
-                    UE_LOG(LogTemp, Warning, TEXT("S_Character::HandleWeaponEquipped: SecondaryFireAbilityClass CDO for %s is not of expected type S_WeaponSecondaryAbility or derived."), *WeaponData->GetName());
+                    UE_LOG(LogTemp, Warning, TEXT("AS_Character::HandleWeaponEquipped: SecondaryFireAbilityClass CDO for %s is not S_WeaponSecondaryAbility."), *WeaponData->GetName());
                 }
 
                 if (HasAuthority())
                 {
                     FGameplayAbilitySpec Spec(WeaponData->SecondaryFireAbilityClass, 1, CurrentSecondaryAbilityInputID, NewWeapon);
-                    CurrentWeaponAbilityHandles.Add(ASC->GiveAbility(Spec));
+                    FGameplayAbilitySpecHandle NewHandle = ASC->GiveAbility(Spec);
+                    CurrentWeaponAbilityHandles.Add(NewHandle);
+                    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped (Server): %s - Granted Secondary Ability %s. Handle: %s"), *GetNameSafe(this), *WeaponData->SecondaryFireAbilityClass->GetName(), *NewHandle.ToString());
                 }
             }
         }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("AS_Character::HandleWeaponEquipped: %s - NewWeapon %s has no WeaponData."), *GetNameSafe(this), *NewWeapon->GetName());
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - NewWeapon is null, no abilities to grant."), *GetNameSafe(this));
     }
 }
 
@@ -269,21 +301,27 @@ void AS_Character::Input_Look(const FInputActionValue& InputActionValue)
 
 void AS_Character::Input_Jump(const FInputActionValue& InputActionValue)
 {
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_Jump: %s"), *GetNameSafe(this));
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
     if (ASC)
     {
-        Super::Jump();
+        // Example: Try activate jump ability by tag
+        // FGameplayTag JumpTag = FGameplayTag::RequestGameplayTag(FName("Ability.Action.Jump"));
+        // ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(JumpTag));
+        Super::Jump(); // For now, standard jump
     }
 }
 
 void AS_Character::Input_StopJumping(const FInputActionValue& InputActionValue)
 {
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_StopJumping: %s"), *GetNameSafe(this));
     Super::StopJumping();
 }
 
 void AS_Character::Input_PrimaryAbility_Pressed(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_PrimaryAbility_Pressed: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentPrimaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentPrimaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputPressed(CurrentPrimaryAbilityInputID);
@@ -293,6 +331,7 @@ void AS_Character::Input_PrimaryAbility_Pressed(const FInputActionValue& InputAc
 void AS_Character::Input_PrimaryAbility_Released(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_PrimaryAbility_Released: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentPrimaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentPrimaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputReleased(CurrentPrimaryAbilityInputID);
@@ -302,6 +341,7 @@ void AS_Character::Input_PrimaryAbility_Released(const FInputActionValue& InputA
 void AS_Character::Input_SecondaryAbility_Pressed(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_SecondaryAbility_Pressed: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentSecondaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentSecondaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputPressed(CurrentSecondaryAbilityInputID);
@@ -311,6 +351,7 @@ void AS_Character::Input_SecondaryAbility_Pressed(const FInputActionValue& Input
 void AS_Character::Input_SecondaryAbility_Released(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_SecondaryAbility_Released: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentSecondaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentSecondaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputReleased(CurrentSecondaryAbilityInputID);
@@ -319,16 +360,19 @@ void AS_Character::Input_SecondaryAbility_Released(const FInputActionValue& Inpu
 
 void AS_Character::Input_NextWeapon(const FInputActionValue& InputActionValue)
 {
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_NextWeapon: %s. Inventory Valid: %d"), *GetNameSafe(this), WeaponInventoryComponent != nullptr);
     if (WeaponInventoryComponent) WeaponInventoryComponent->ServerRequestNextWeapon();
 }
 
 void AS_Character::Input_PreviousWeapon(const FInputActionValue& InputActionValue)
 {
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_PreviousWeapon: %s. Inventory Valid: %d"), *GetNameSafe(this), WeaponInventoryComponent != nullptr);
     if (WeaponInventoryComponent) WeaponInventoryComponent->ServerRequestPreviousWeapon();
 }
 
 void AS_Character::HandleDeath()
 {
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleDeath: %s executing death logic."), *GetNameSafe(this));
     K2_OnDeath();
 
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -347,6 +391,5 @@ void AS_Character::HandleDeath()
     {
         DisableInput(PC);
     }
-
-    UE_LOG(LogTemp, Log, TEXT("S_Character %s: HandleDeath executed."), *GetName());
+    UE_LOG(LogTemp, Log, TEXT("S_Character %s: HandleDeath executed. Collision and input disabled."), *GetName());
 }

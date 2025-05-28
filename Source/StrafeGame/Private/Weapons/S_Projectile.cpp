@@ -1,43 +1,43 @@
+// Source/StrafeGame/Private/Weapons/S_Projectile.cpp
 #include "Weapons/S_Projectile.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Weapons/S_ProjectileWeapon.h"
-#include "Player/S_Character.h" // For APawn / AS_Character casting
+#include "Player/S_Character.h" 
 #include "Weapons/S_ProjectileWeaponDataAsset.h"
 #include "Net/UnrealNetwork.h"
-#include "Kismet/GameplayStatics.h" // For ApplyRadialDamageWithFalloff
-#include "GameFramework/DamageType.h" // For UDamageType
-#include "AbilitySystemBlueprintLibrary.h" // For GameplayCue execution
-#include "AbilitySystemComponent.h"    // For UAbilitySystemComponent
+#include "Kismet/GameplayStatics.h" 
+#include "GameFramework/DamageType.h" 
+#include "AbilitySystemBlueprintLibrary.h" 
+#include "AbilitySystemComponent.h"    
 
 AS_Projectile::AS_Projectile()
 {
-    PrimaryActorTick.bCanEverTick = false; // Projectiles usually don't need to tick after initial launch
+    PrimaryActorTick.bCanEverTick = false;
     bReplicates = true;
-    SetReplicateMovement(true); // Essential for projectiles
+    SetReplicateMovement(true);
 
     CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
     RootComponent = CollisionComponent;
     CollisionComponent->InitSphereRadius(10.0f);
-    CollisionComponent->SetCollisionProfileName(TEXT("Projectile")); // Use a custom "Projectile" collision profile
-    CollisionComponent->bReturnMaterialOnMove = true; // For physical material based effects
+    CollisionComponent->SetCollisionProfileName(TEXT("Projectile"));
+    CollisionComponent->bReturnMaterialOnMove = true;
 
     ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovementComponent"));
     ProjectileMovementComponent->UpdatedComponent = CollisionComponent;
     ProjectileMovementComponent->InitialSpeed = 3000.f;
     ProjectileMovementComponent->MaxSpeed = 3000.f;
     ProjectileMovementComponent->bRotationFollowsVelocity = true;
-    ProjectileMovementComponent->bShouldBounce = false; // Default, can be overridden
-    ProjectileMovementComponent->ProjectileGravityScale = 0.0f; // Default to no gravity, like rockets
+    ProjectileMovementComponent->bShouldBounce = false;
+    ProjectileMovementComponent->ProjectileGravityScale = 0.0f;
 
     ProjectileMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("ProjectileMesh"));
     ProjectileMeshComponent->SetupAttachment(CollisionComponent);
     ProjectileMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-    // Defaults
     bExplodeOnImpact = true;
-    MaxLifetime = 5.0f; // Projectile will self-destruct after 5 seconds by default
+    MaxLifetime = 5.0f;
     BaseDamage = 50.0f;
     MinimumDamage = 10.0f;
     DamageInnerRadius = 100.0f;
@@ -47,6 +47,7 @@ AS_Projectile::AS_Projectile()
     InstigatorPawn = nullptr;
     OwningWeapon = nullptr;
     OwningWeaponDataAsset = nullptr;
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::AS_Projectile: Constructor for %s"), *GetNameSafe(this));
 }
 
 void AS_Projectile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -54,37 +55,38 @@ void AS_Projectile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AS_Projectile, InstigatorPawn);
     DOREPLIFETIME(AS_Projectile, OwningWeapon);
-    // OwningWeaponDataAsset is set on spawn for server & client, not replicated itself.
-    // bExplodeOnImpact and MaxLifetime are set at design time or on spawn, not typically replicated during flight.
 }
 
 void AS_Projectile::BeginPlay()
 {
     Super::BeginPlay();
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::BeginPlay: %s - Instigator: %s, OwningWeapon: %s. HasAuthority: %d"), 
+         *GetNameSafe(this), *GetNameSafe(InstigatorPawn), *GetNameSafe(OwningWeapon), HasAuthority());
 
-    // Bind the OnHit event only on the server, as collision handling is server-authoritative.
     if (HasAuthority())
     {
         CollisionComponent->OnComponentHit.AddDynamic(this, &AS_Projectile::OnHit);
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::BeginPlay: %s - Bound OnHit delegate (Server)."), *GetNameSafe(this));
     }
 
     if (MaxLifetime > 0.0f)
     {
-        SetLifeSpan(MaxLifetime); // AActor's built-in lifespan mechanism
+        SetLifeSpan(MaxLifetime);
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::BeginPlay: %s - Lifespan set to %f seconds."), *GetNameSafe(this), MaxLifetime);
     }
 
-    K2_OnSpawned(); // Call Blueprint event
+    K2_OnSpawned();
 }
 
 void AS_Projectile::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    if (OwningWeapon && HasAuthority()) // Only server should unregister
+    if (OwningWeapon && HasAuthority())
     {
-        // If AS_ProjectileWeapon exists and has a specific way to unregister:
-        // if (AS_ProjectileWeapon* ProjWeapon = Cast<AS_ProjectileWeapon>(OwningWeapon))
-        // {
-        //     ProjWeapon->UnregisterProjectile(this);
-        // }
+        if (AS_ProjectileWeapon* ProjWeapon = Cast<AS_ProjectileWeapon>(OwningWeapon))
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::EndPlay: %s - Unregistering from OwningWeapon %s."), *GetNameSafe(this), *ProjWeapon->GetName());
+            ProjWeapon->UnregisterProjectile(this);
+        }
     }
     Super::EndPlay(EndPlayReason);
 }
@@ -92,105 +94,105 @@ void AS_Projectile::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AS_Projectile::LifeSpanExpired()
 {
-    // Called when the actor's lifespan is up.
-    // Default behavior is to call Destroy(). We might want to Detonate instead if applicable.
-    if (HasAuthority()) // Server handles detonation logic
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::LifeSpanExpired: %s. HasAuthority: %d, bExplodeOnImpact: %d"), *GetNameSafe(this), HasAuthority(), bExplodeOnImpact);
+    if (HasAuthority())
     {
-        if (bExplodeOnImpact) // Or a specific bExplodeOnLifespanEnd flag
+        if (bExplodeOnImpact)
         {
-            // UE_LOG(LogTemp, Log, TEXT("AS_Projectile %s: Lifespan expired, detonating."), *GetName());
+            UE_LOG(LogTemp, Log, TEXT("AS_Projectile %s: Lifespan expired, detonating."), *GetName());
             Detonate();
         }
         else
         {
-            // UE_LOG(LogTemp, Log, TEXT("AS_Projectile %s: Lifespan expired, destroying without detonation."), *GetName());
-            Destroy(); // Default lifespan behavior if not exploding
+            UE_LOG(LogTemp, Log, TEXT("AS_Projectile %s: Lifespan expired, destroying without detonation."), *GetName());
+            Destroy();
         }
     }
-    // Super::LifeSpanExpired(); // Calls Destroy() by default, so if we handle it, we might not call super.
 }
 
 void AS_Projectile::InitializeProjectile(APawn* InInstigatorPawn, AS_ProjectileWeapon* InOwningWeapon, const US_ProjectileWeaponDataAsset* InWeaponDataAsset)
 {
     InstigatorPawn = InInstigatorPawn;
-    SetInstigator(InInstigatorPawn); // Set AActor's Instigator
+    SetInstigator(InInstigatorPawn);
     OwningWeapon = InOwningWeapon;
-    OwningWeaponDataAsset = InWeaponDataAsset; // Store for accessing cues or other shared data
+    OwningWeaponDataAsset = InWeaponDataAsset;
+
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::InitializeProjectile: %s - Instigator: %s, Weapon: %s, WeaponDA: %s"), 
+         *GetNameSafe(this), *GetNameSafe(InInstigatorPawn), *GetNameSafe(InOwningWeapon), *GetNameSafe(InWeaponDataAsset));
 
     if (InInstigatorPawn)
     {
-        SetOwner(InInstigatorPawn->GetController()); // Projectile's direct owner is often the Controller for damage attribution
+        SetOwner(InInstigatorPawn->GetController());
     }
     else if (InOwningWeapon) {
-        SetOwner(InOwningWeapon->GetOwner()); // Fallback to weapon's owner
+        SetOwner(InOwningWeapon->GetOwner());
     }
 
-
-    // Apply projectile speed from WeaponDataAsset if specified
     if (OwningWeaponDataAsset)
     {
-        // Example: If ProjectileWeaponDataAsset has LaunchSpeed
-        // if (const US_ProjectileWeaponDataAsset* ProjWepData = Cast<US_ProjectileWeaponDataAsset>(OwningWeaponDataAsset))
-        // {
-        //     if (ProjWepData->LaunchSpeed > 0 && ProjectileMovementComponent)
-        //     {
-        //         ProjectileMovementComponent->InitialSpeed = ProjWepData->LaunchSpeed;
-        //         ProjectileMovementComponent->MaxSpeed = ProjWepData->LaunchSpeed;
-        //     }
-        //     if (ProjWepData->ProjectileLifeSpan > 0) MaxLifetime = ProjWepData->ProjectileLifeSpan; // Set before BeginPlay if possible
-        // }
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::InitializeProjectile: %s - Applying settings from DA: LaunchSpeed: %f, Lifespan: %f"), 
+             *GetNameSafe(this), OwningWeaponDataAsset->LaunchSpeed, OwningWeaponDataAsset->ProjectileLifeSpan);
+        if (OwningWeaponDataAsset->LaunchSpeed > 0 && ProjectileMovementComponent)
+        {
+            ProjectileMovementComponent->InitialSpeed = OwningWeaponDataAsset->LaunchSpeed;
+            ProjectileMovementComponent->MaxSpeed = OwningWeaponDataAsset->LaunchSpeed;
+        }
+        if (OwningWeaponDataAsset->ProjectileLifeSpan > 0) MaxLifetime = OwningWeaponDataAsset->ProjectileLifeSpan;
+        if (OwningWeaponDataAsset->ProjectileExplosionCueTag.IsValid()) ExplosionCueTag = OwningWeaponDataAsset->ProjectileExplosionCueTag;
     }
 }
 
 void AS_Projectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector HitNormal, const FHitResult& HitResult)
 {
-    if (!HasAuthority()) return; // Server handles hit logic
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::OnHit: %s - Hit %s (Comp: %s). HasAuthority: %d, bExplodeOnImpact: %d"), 
+         *GetNameSafe(this), *GetNameSafe(OtherActor), *GetNameSafe(OtherComp), HasAuthority(), bExplodeOnImpact);
+    if (!HasAuthority()) return;
 
-    // Avoid self-collision immediately after spawn if needed, though ProjectileMovementComponent often handles this.
     if (OtherActor == InstigatorPawn || OtherActor == OwningWeapon)
     {
-        // Could add a short grace period after spawn to ignore instigator collision if required
-        // For now, assume standard collision filtering is adequate.
-        // return;
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::OnHit: %s - Hit instigator or owning weapon. Ignoring."), *GetNameSafe(this));
+        // return; // This might be too restrictive if projectiles can hit owner after a delay/bounce
     }
 
-    // UE_LOG(LogTemp, Log, TEXT("AS_Projectile %s: Hit %s."), *GetName(), OtherActor ? *OtherActor->GetName() : TEXT("World"));
-    K2_OnImpact(HitResult); // Call Blueprint event
+    K2_OnImpact(HitResult);
 
     if (bExplodeOnImpact)
     {
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::OnHit: %s - Exploding on impact."), *GetNameSafe(this));
         Detonate();
     }
     else
     {
-        // Handle non-explosive impact (e.g., stick, bounce, destroy)
-        // For now, just destroy if not exploding on impact
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::OnHit: %s - Not exploding on impact. Destroying."), *GetNameSafe(this));
         Destroy();
     }
 }
 
 void AS_Projectile::Detonate()
 {
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::Detonate: %s. HasAuthority: %d"), *GetNameSafe(this), HasAuthority());
     if (!HasAuthority())
     {
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::Detonate: %s - Client requesting server detonation."), *GetNameSafe(this));
         Server_RequestDetonation();
         return;
     }
 
-    // UE_LOG(LogTemp, Log, TEXT("AS_Projectile %s: Detonating at %s."), *GetName(), *GetActorLocation().ToString());
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile %s: DETONATING at %s."), *GetName(), *GetActorLocation().ToString());
 
-    ApplyRadialDamage(); // Server applies damage
+    ApplyRadialDamage();
 
-    // Trigger GameplayCue for explosion effects (visuals, sound)
-    // The GameplayCue will be replicated and play on all clients.
-    FGameplayTag CueToPlay = ExplosionCueTag; // Default from this projectile
-    if (OwningWeaponDataAsset && OwningWeaponDataAsset->ProjectileExplosionCueTag.IsValid()) // Check if weapon DA has a more specific one
+    FGameplayTag CueToPlay = ExplosionCueTag;
+    if (OwningWeaponDataAsset && OwningWeaponDataAsset->ProjectileExplosionCueTag.IsValid())
     {
-        // Example: If US_ProjectileWeaponDataAsset defined ProjectileExplosionCueTag
-        // if (const US_ProjectileWeaponDataAsset* ProjWepData = Cast<US_ProjectileWeaponDataAsset>(OwningWeaponDataAsset)) {
-        //    if(ProjWepData->ProjectileExplosionCueTag.IsValid()) CueToPlay = ProjWepData->ProjectileExplosionCueTag;
-        // }
+        CueToPlay = OwningWeaponDataAsset->ProjectileExplosionCueTag;
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::Detonate: %s - Using ExplosionCueTag from WeaponDA: %s"), *GetNameSafe(this), *CueToPlay.ToString());
     }
+    else
+    {
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::Detonate: %s - Using local ExplosionCueTag: %s"), *GetNameSafe(this), *CueToPlay.ToString());
+    }
+
 
     if (CueToPlay.IsValid() && InstigatorPawn)
     {
@@ -199,28 +201,31 @@ void AS_Projectile::Detonate()
         {
             FGameplayCueParameters CueParams;
             CueParams.Location = GetActorLocation();
-            // CueParams.Normal = ImpactNormal; // If from a hit
             CueParams.Instigator = InstigatorPawn;
-            CueParams.EffectCauser = this; // Projectile caused the cue
-            // CueParams.SourceAbility = OwningAbility; // If projectile was spawned by an ability and you have a ref
+            CueParams.EffectCauser = this;
             ASC->ExecuteGameplayCue(CueToPlay, CueParams);
+            UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::Detonate: %s - Executed GameplayCue %s via Instigator ASC."), *GetNameSafe(this), *CueToPlay.ToString());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("AS_Projectile::Detonate: %s - Instigator %s has no ASC. Cannot play cue %s."), *GetNameSafe(this), *GetNameSafe(InstigatorPawn), *CueToPlay.ToString());
         }
     }
     else {
-        // Fallback to K2 event if no cue specified (less ideal for multiplayer effects)
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::Detonate: %s - No valid cue (%s) or InstigatorPawn (%s). Calling K2_OnExplosionEffects."), *GetNameSafe(this), *CueToPlay.ToString(), *GetNameSafe(InstigatorPawn));
         K2_OnExplosionEffects(GetActorLocation());
     }
 
-    // Notify owning weapon (if it's a projectile weapon) that this projectile is gone
     if (OwningWeapon)
     {
         if (AS_ProjectileWeapon* ProjWeapon = Cast<AS_ProjectileWeapon>(OwningWeapon))
         {
+            UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::Detonate: %s - Unregistering self from OwningWeapon %s prior to destroy."), *GetNameSafe(this), *ProjWeapon->GetName());
             ProjWeapon->UnregisterProjectile(this);
         }
     }
 
-    Destroy(); // Destroy the projectile actor
+    Destroy();
 }
 
 void AS_Projectile::ApplyRadialDamage()
@@ -234,28 +239,31 @@ void AS_Projectile::ApplyRadialDamage()
     }
 
     TArray<AActor*> IgnoredActors;
-    IgnoredActors.Add(this); // Don't damage self
-    if (InstigatorPawn) IgnoredActors.Add(InstigatorPawn); // Don't damage firer by default, can be configured by damage GE
+    IgnoredActors.Add(this);
+    if (InstigatorPawn) IgnoredActors.Add(InstigatorPawn);
     if (OwningWeapon) IgnoredActors.Add(OwningWeapon);
 
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::ApplyRadialDamage: %s - Applying radial damage. Base: %f, Min: %f, InnerR: %f, OuterR: %f, Location: %s"),
+         *GetNameSafe(this), BaseDamage, MinimumDamage, DamageInnerRadius, DamageOuterRadius, *GetActorLocation().ToString());
 
     UGameplayStatics::ApplyRadialDamageWithFalloff(
-        this, // WorldContextObject
+        this,
         BaseDamage,
-        MinimumDamage, // Damage at the edge of the radius
+        MinimumDamage,
         GetActorLocation(),
-        DamageInnerRadius,  // Full damage up to this radius
-        DamageOuterRadius,  // Zero damage beyond this radius
-        1.0f,               // DamageFalloff exponent (1.0 for linear)
+        DamageInnerRadius,
+        DamageOuterRadius,
+        1.0f,
         DamageTypeClass,
-        IgnoredActors,      // Actors to ignore
-        this,               // DamageCauser (the projectile)
-        EventInstigatorController // Controller that instigated the damage
+        IgnoredActors,
+        this,
+        EventInstigatorController
     );
 }
 
 bool AS_Projectile::Server_RequestDetonation_Validate() { return true; }
 void AS_Projectile::Server_RequestDetonation_Implementation()
 {
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::Server_RequestDetonation_Implementation: %s - Server received detonation request."), *GetNameSafe(this));
     Detonate();
 }
