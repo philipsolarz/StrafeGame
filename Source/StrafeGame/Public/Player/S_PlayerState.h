@@ -68,8 +68,12 @@ protected:
     TObjectPtr<US_AttributeSet> AttributeSet;
 
     // --- GAS DATA ASSETS & INITIALIZATION ---
+    /**
+     * GameplayEffect to apply to initialize attributes.
+     * Changed from TSoftObjectPtr to TSubclassOf for direct Blueprint selection.
+     */
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "PlayerState|GAS|Defaults", meta = (DisplayName = "Player Default Attributes Effect"))
-    TSoftObjectPtr<UGameplayEffect> DefaultAttributesEffect;
+    TSubclassOf<UGameplayEffect> DefaultAttributesEffect; // MODIFIED HERE
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "PlayerState|GAS|Defaults", meta = (DisplayName = "Default Player-Owned Abilities"))
     TArray<TSubclassOf<UGameplayAbility>> DefaultPlayerAbilities;

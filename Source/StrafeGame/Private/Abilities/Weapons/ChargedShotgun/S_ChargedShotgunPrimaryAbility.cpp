@@ -56,22 +56,6 @@ void US_ChargedShotgunPrimaryAbility::ActivateAbility(const FGameplayAbilitySpec
 {
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData); //
 
-    ResetAbilityState(); // Clear flags
-
-    // Start listening for input release immediately. The ability ends if input is released before full charge.
-    WaitInputReleaseTask = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true); //
-    if (WaitInputReleaseTask)
-    {
-        // WaitInputReleaseTask->OnRelease.AddDynamic(this, &US_ChargedShotgunPrimaryAbility::OnInputReleased); // Bind to the correct delegate
-        WaitInputReleaseTask->ReadyForActivation(); //
-    }
-    else
-    {
-        CancelAbility(Handle, ActorInfo, ActivationInfo, true); //
-        return;
-    }
-
-    StartCharge(); // Begin the charge process
 }
 
 void US_ChargedShotgunPrimaryAbility::StartCharge()
@@ -278,6 +262,27 @@ void US_ChargedShotgunPrimaryAbility::InputReleased(const FGameplayAbilitySpecHa
     {
         EndAbility(Handle, ActorInfo, ActivationInfo, false, bIsCharging); // bWasCancelled is true if released during charge
     }
+}
+
+void US_ChargedShotgunPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
+{
+
+    ResetAbilityState(); // Clear flags
+
+    // Start listening for input release immediately. The ability ends if input is released before full charge.
+    WaitInputReleaseTask = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true); //
+    if (WaitInputReleaseTask)
+    {
+        // WaitInputReleaseTask->OnRelease.AddDynamic(this, &US_ChargedShotgunPrimaryAbility::OnInputReleased); // Bind to the correct delegate
+        WaitInputReleaseTask->ReadyForActivation(); //
+    }
+    else
+    {
+        CancelAbility(Handle, ActorInfo, ActivationInfo, true); //
+        return;
+    }
+
+    StartCharge(); // Begin the charge process
 }
 
 

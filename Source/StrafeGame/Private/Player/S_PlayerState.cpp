@@ -3,7 +3,7 @@
 #include "Player/Attributes/S_AttributeSet.h" // To be created
 #include "AbilitySystemComponent.h"
 #include "Net/UnrealNetwork.h"
-#include "GameplayEffect.h"
+#include "GameplayEffect.h" // Ensure UGameplayEffect is fully included
 #include "Abilities/GameplayAbility.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
@@ -90,19 +90,20 @@ UAbilitySystemComponent* AS_PlayerState::GetAbilitySystemComponent() const
 
 void AS_PlayerState::InitializeAttributes()
 {
-    if (!AbilitySystemComponent || !AttributeSet || !DefaultAttributesEffect.IsValid()) return;
+    if (!AbilitySystemComponent || !AttributeSet || !DefaultAttributesEffect) return; // MODIFIED: Check if class is set, not if pointer is valid
     if (HasAuthority())
     {
         FGameplayEffectContextHandle EffectContext = AbilitySystemComponent->MakeEffectContext();
         EffectContext.AddSourceObject(this);
-        UGameplayEffect* EffectCDO = DefaultAttributesEffect.LoadSynchronous();
-        if (EffectCDO)
+        // MODIFIED: Directly use the TSubclassOf<UGameplayEffect>
+        FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(DefaultAttributesEffect, 1, EffectContext);
+        if (SpecHandle.IsValid())
         {
-            FGameplayEffectSpecHandle SpecHandle = AbilitySystemComponent->MakeOutgoingSpec(EffectCDO->GetClass(), 1, EffectContext);
-            if (SpecHandle.IsValid())
-            {
-                AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
-            }
+            AbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("AS_PlayerState::InitializeAttributes: Failed to create spec for DefaultAttributesEffect %s."), *DefaultAttributesEffect->GetName());
         }
     }
 }
