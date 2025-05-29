@@ -1,10 +1,43 @@
+// Source/StrafeGame/Private/Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncher.cpp
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncher.h"
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h"
-#include "Weapons/S_ProjectileWeaponDataAsset.h" // Or US_StickyLauncherDataAsset
+#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncherDataAsset.h" // Specific DataAsset
 
 AS_StickyGrenadeLauncher::AS_StickyGrenadeLauncher()
 {
-    // MaxActiveStickies = 3; // Default, but this check should be in the fire ability
+    // Constructor
+}
+
+void AS_StickyGrenadeLauncher::ExecutePrimaryFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData)
+{
+    UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher::ExecutePrimaryFire_Implementation for %s"), *GetNameSafe(this));
+    const US_StickyGrenadeLauncherDataAsset* StickyData = Cast<US_StickyGrenadeLauncherDataAsset>(GetWeaponData());
+    if (!StickyData)
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StickyGrenadeLauncher::ExecutePrimaryFire: WeaponData is not US_StickyGrenadeLauncherDataAsset for %s."), *GetNameSafe(this));
+        Super::ExecutePrimaryFire_Implementation(FireStartLocation, FireDirection, EventData);
+        return;
+    }
+    if (!StickyData->ProjectileClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StickyGrenadeLauncher::ExecutePrimaryFire: ProjectileClass is not set in StickyLauncherDataAsset for %s."), *GetNameSafe(this));
+        return;
+    }
+    // Check for max active stickies is handled by the ability (US_StickyLauncherPrimaryAbility::CanActivateAbility) before this is called.
+    PerformProjectileSpawnLogic(
+        FireStartLocation,
+        FireDirection,
+        EventData,
+        StickyData->ProjectileClass,
+        StickyData->LaunchSpeed,
+        StickyData->ProjectileLifeSpan
+    );
+}
+
+void AS_StickyGrenadeLauncher::ExecuteSecondaryFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData)
+{
+    UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher::ExecuteSecondaryFire_Implementation for %s - Secondary fire for Sticky Launcher is DetonateOldestActiveSticky, called by its ability."), *GetNameSafe(this));
+    // Super::ExecuteSecondaryFire_Implementation(FireStartLocation, FireDirection, EventData); // Calls base warning
 }
 
 bool AS_StickyGrenadeLauncher::DetonateOldestActiveSticky()
@@ -14,12 +47,9 @@ bool AS_StickyGrenadeLauncher::DetonateOldestActiveSticky()
     if (ActiveProjectiles.Num() > 0)
     {
         AS_StickyGrenadeProjectile* OldestSticky = nullptr;
-
-        // Iterate to find the first valid AS_StickyGrenadeProjectile.
-        // ActiveProjectiles are added to the end, so index 0 is oldest.
         for (AS_Projectile* Proj : ActiveProjectiles)
         {
-            if (Proj && !Proj->IsPendingKillPending())
+            if (Proj && !Proj->IsPendingKillPending()) // Ensure it's valid
             {
                 OldestSticky = Cast<AS_StickyGrenadeProjectile>(Proj);
                 if (OldestSticky) break; // Found the first valid sticky
@@ -33,5 +63,6 @@ bool AS_StickyGrenadeLauncher::DetonateOldestActiveSticky()
             return true;
         }
     }
+    UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher %s: No active stickies to detonate."), *GetName());
     return false;
 }

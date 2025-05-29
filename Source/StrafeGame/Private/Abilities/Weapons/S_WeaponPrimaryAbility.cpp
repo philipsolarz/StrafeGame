@@ -1,23 +1,21 @@
 // Source/StrafeGame/Private/Abilities/Weapons/S_WeaponPrimaryAbility.cpp
 #include "Abilities/Weapons/S_WeaponPrimaryAbility.h"
 #include "Weapons/S_Weapon.h"
-#include "Weapons/S_WeaponDataAsset.h" 
-#include "Weapons/S_HitscanWeaponDataAsset.h" 
-#include "Weapons/S_ProjectileWeaponDataAsset.h" 
+#include "Weapons/S_WeaponDataAsset.h"
 #include "Player/S_Character.h"
-#include "Player/Attributes/S_AttributeSet.h" 
+#include "Player/Attributes/S_AttributeSet.h"
 #include "AbilitySystemComponent.h"
 #include "GameplayTagContainer.h"
-#include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h" 
+#include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
 #include "Animation/AnimMontage.h"
 #include "GameFramework/Controller.h"
-#include "GameplayEffectTypes.h" 
+#include "GameplayEffectTypes.h"
 #include "Abilities/GameplayAbility.h"
 
 US_WeaponPrimaryAbility::US_WeaponPrimaryAbility()
 {
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
-    AbilityInputID = 0;
+    AbilityInputID = 0; // Typically 0 for primary fire
     FGameplayTagContainer TempTags;
     TempTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Weapon.Action.PrimaryFire")));
     SetAssetTags(TempTags);
@@ -40,29 +38,32 @@ bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandl
 
     if (!Character || !EquippedWeapon || !WeaponData || !ASC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("US_WeaponPrimaryAbility::CanActivateAbility: %s - Missing Character (%d), Weapon (%d), WeaponData (%d), or ASC (%d)."), 
-             *GetNameSafe(this), Character != nullptr, EquippedWeapon != nullptr, WeaponData != nullptr, ASC != nullptr);
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponPrimaryAbility::CanActivateAbility: %s - Missing Character (%d), Weapon (%d), WeaponData (%d), or ASC (%d)."),
+            *GetNameSafe(this), Character != nullptr, EquippedWeapon != nullptr, WeaponData != nullptr, ASC != nullptr);
         return false;
     }
 
     if (EquippedWeapon->GetCurrentWeaponState() != EWeaponState::Equipped)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::CanActivateAbility: %s - Weapon %s is not in Equipped state (Current: %s)."), 
-             *GetNameSafe(this), *EquippedWeapon->GetName(), *UEnum::GetValueAsString(EquippedWeapon->GetCurrentWeaponState()));
+        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::CanActivateAbility: %s - Weapon %s is not in Equipped state (Current: %s)."),
+            *GetNameSafe(this), *EquippedWeapon->GetName(), *UEnum::GetValueAsString(EquippedWeapon->GetCurrentWeaponState()));
         return false;
     }
 
     if (WeaponData->AmmoAttribute.IsValid())
     {
-        if (ASC->GetNumericAttribute(WeaponData->AmmoAttribute) <= 0)
+        if (WeaponData->AmmoCostEffect_Primary)
         {
-            UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::CanActivateAbility: %s - Out of ammo for %s (Attribute: %s)."), 
-                 *GetNameSafe(this), *EquippedWeapon->GetName(), *WeaponData->AmmoAttribute.AttributeName);
-            if (WeaponData->OutOfAmmoCueTag.IsValid())
+            if (ASC->GetNumericAttribute(WeaponData->AmmoAttribute) <= 0)
             {
-                ASC->ExecuteGameplayCue(WeaponData->OutOfAmmoCueTag, ASC->MakeEffectContext());
+                UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::CanActivateAbility: %s - Out of ammo for %s (Attribute: %s)."),
+                    *GetNameSafe(this), *EquippedWeapon->GetName(), *WeaponData->AmmoAttribute.AttributeName);
+                if (WeaponData->OutOfAmmoCueTag.IsValid())
+                {
+                    ASC->ExecuteGameplayCue(WeaponData->OutOfAmmoCueTag, ASC->MakeEffectContext());
+                }
+                return false;
             }
-            return false;
         }
     }
     UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::CanActivateAbility: %s - Ability can be activated."), *GetNameSafe(this));
@@ -71,41 +72,57 @@ bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandl
 
 void US_WeaponPrimaryAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
-    UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s - Handle: %s, Actor: %s"), *GetNameSafe(this), *Handle.ToString(), ActorInfo ? *GetNameSafe(ActorInfo->AvatarActor.Get()) : TEXT("UnknownActor"));
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s (%s) - Handle: %s"), *GetClass()->GetName(), *GetNameSafe(this), *Handle.ToString());
+    CurrentEventData = TriggerEventData;
+
+    // Call UGameplayAbility's ActivateAbility. This is important for BP K2_ActivateAbility etc.
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 
-    if (!CommitAbility(Handle, ActorInfo, ActivationInfo))
+    // Check if the ability is still active. K2_ActivateAbility (if implemented in BP)
+    // could have called EndAbility.
+    if (IsActive())
     {
-        UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s - Failed to commit ability. Ending."), *GetNameSafe(this));
-        EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
-        return;
+        if (CommitAbility(Handle, ActorInfo, ActivationInfo))
+        {
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s (%s) - Committed. Calling PerformWeaponFire."), *GetClass()->GetName(), *GetNameSafe(this));
+            // PerformWeaponFire is virtual, so the most derived version will be called
+            // (e.g., US_ChargedShotgunPrimaryAbility::PerformWeaponFire if this is an instance of that)
+            PerformWeaponFire(Handle, ActorInfo, ActivationInfo);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s (%s) - Commit failed. Ending ability."), *GetClass()->GetName(), *GetNameSafe(this));
+            EndAbility(Handle, ActorInfo, ActivationInfo, true, true); // true for replicate, true for cancelled
+        }
     }
-    UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s - Ability committed. Performing weapon fire."), *GetNameSafe(this));
-    PerformWeaponFire(Handle, ActorInfo, ActivationInfo);
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s (%s) - Ability was ended during Super::ActivateAbility or K2_ActivateAbility. Not proceeding with PerformWeaponFire."), *GetClass()->GetName(), *GetNameSafe(this));
+    }
 }
+
 
 void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
     AS_Character* Character = GetOwningSCharacter();
     AS_Weapon* Weapon = GetEquippedWeapon();
     const US_WeaponDataAsset* WeaponData = GetEquippedWeaponData();
-    UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - Character: %s, Weapon: %s, WeaponData: %s"), 
-         *GetNameSafe(this), *GetNameSafe(Character), *GetNameSafe(Weapon), *GetNameSafe(WeaponData));
-
-    FVector FireDirection;
-    FVector FireStartLocation;
-    FRotator CamRot;
-    FVector CamAimDir;
+    UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - Character: %s, Weapon: %s, WeaponData: %s"),
+        *GetNameSafe(this), *GetNameSafe(Character), *GetNameSafe(Weapon), *GetNameSafe(WeaponData));
 
     if (!Character || !Weapon || !WeaponData)
     {
-        UE_LOG(LogTemp, Error, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - Critical component missing. Ending ability."), *GetNameSafe(this));
-        EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+        UE_LOG(LogTemp, Error, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - Critical component missing. Ending ability."), *GetNameSafe(this));
+        CancelAbility(Handle, ActorInfo, ActivationInfo, true);
         return;
     }
 
     ApplyAmmoCost(Handle, ActorInfo, ActivationInfo);
     ApplyAbilityCooldown(Handle, ActorInfo, ActivationInfo);
+
+    FVector FireStartLocation;
+    FRotator CamRot;
+    FVector FireDirection;
 
     AController* Controller = Character->GetController();
     if (Controller)
@@ -113,10 +130,10 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         FVector MuzzleLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
         FVector CamLoc;
         Controller->GetPlayerViewPoint(CamLoc, CamRot);
-        CamAimDir = CamRot.Vector();
+        FireDirection = CamRot.Vector();
 
         const float MaxTraceDist = WeaponData->MaxAimTraceRange > 0.f ? WeaponData->MaxAimTraceRange : 100000.0f;
-        FVector CamTraceEnd = CamLoc + CamAimDir * MaxTraceDist;
+        FVector CamTraceEnd = CamLoc + FireDirection * MaxTraceDist;
 
         FHitResult CameraTraceHit;
         FCollisionQueryParams QueryParams;
@@ -128,22 +145,23 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         {
             FireDirection = (CameraTraceHit.ImpactPoint - MuzzleLocation).GetSafeNormal();
         }
-        else {
+        else
+        {
             FireDirection = (CamTraceEnd - MuzzleLocation).GetSafeNormal();
         }
-        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - Firing from Muzzle: %s, Dir: %s (Player Aim)"), *GetNameSafe(this), *MuzzleLocation.ToString(), *FireDirection.ToString());
+        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - Firing from Muzzle: %s, Dir: %s (Player Aim)"), *GetNameSafe(this), *MuzzleLocation.ToString(), *FireDirection.ToString());
     }
     else
     {
         FireStartLocation = Weapon->GetWeaponMeshComponent()->GetSocketLocation(WeaponData->MuzzleFlashSocketName);
         FireDirection = Weapon->GetActorForwardVector();
-        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - Firing from Muzzle: %s, Dir: %s (Actor Forward - No Controller)"), *GetNameSafe(this), *FireStartLocation.ToString(), *FireDirection.ToString());
+        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - Firing from Muzzle: %s, Dir: %s (Actor Forward - No Controller)"), *GetNameSafe(this), *FireStartLocation.ToString(), *FireDirection.ToString());
     }
 
     FireMontageTask = PlayWeaponMontage(WeaponData->FireMontage);
     if (FireMontageTask)
     {
-        UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - FireMontageTask started."), *GetNameSafe(this));
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - FireMontageTask started."), *GetNameSafe(this));
         FireMontageTask->OnCompleted.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageCompleted);
         FireMontageTask->OnInterrupted.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageInterruptedOrCancelled);
         FireMontageTask->OnCancelled.AddDynamic(this, &US_WeaponPrimaryAbility::OnFireMontageInterruptedOrCancelled);
@@ -151,31 +169,13 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - No FireMontageTask. Firing directly and ending."), *GetNameSafe(this));
-        float Spread = 0.f;
-        float Range = 0.f;
-        TSubclassOf<AS_Projectile> ProjClass = nullptr;
-
-        if (const US_HitscanWeaponDataAsset* HitscanData = Cast<US_HitscanWeaponDataAsset>(WeaponData))
-        {
-            Spread = HitscanData->SpreadAngle;
-            Range = HitscanData->MaxRange;
-        }
-        else if (const US_ProjectileWeaponDataAsset* ProjData = Cast<US_ProjectileWeaponDataAsset>(WeaponData))
-        {
-            ProjClass = ProjData->ProjectileClass;
-        }
-
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - No FireMontageTask. Firing directly and ending."), *GetNameSafe(this));
         const FGameplayEventData* AbilityTriggerData = CurrentEventData;
-        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - Calling Weapon->ExecuteFire. Spread: %f, Range: %f, ProjClass: %s"), 
-             *GetNameSafe(this), Spread, Range, *GetNameSafe(ProjClass));
-        Weapon->ExecuteFire(
+        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - Calling Weapon->ExecutePrimaryFire directly."), *GetNameSafe(this));
+        Weapon->ExecutePrimaryFire(
             FireStartLocation,
             FireDirection,
-            AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(),
-            Spread,
-            Range,
-            ProjClass
+            AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData()
         );
         EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
     }
@@ -189,7 +189,11 @@ void US_WeaponPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySpecHandle
         CueParams.Instigator = Character;
         CueParams.EffectCauser = Weapon;
         ASC->ExecuteGameplayCue(WeaponData->MuzzleFlashCueTag, CueParams);
-        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire: %s - Executed MuzzleFlashCue %s."), *GetNameSafe(this), *WeaponData->MuzzleFlashCueTag.ToString());
+        UE_LOG(LogTemp, Verbose, TEXT("US_WeaponPrimaryAbility::PerformWeaponFire (Base): %s - Executed MuzzleFlashCue %s."), *GetNameSafe(this), *WeaponData->MuzzleFlashCueTag.ToString());
+    }
+    if (!FireMontageTask)
+    {
+        // Already ended if no montage task
     }
 }
 
@@ -201,7 +205,6 @@ void US_WeaponPrimaryAbility::ApplyAmmoCost(const FGameplayAbilitySpecHandle Han
     {
         FGameplayEffectContextHandle ContextHandle = ASC->MakeEffectContext();
         ContextHandle.AddSourceObject(this);
-
         FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(WeaponData->AmmoCostEffect_Primary, GetAbilityLevel(), ContextHandle);
         if (SpecHandle.IsValid())
         {
@@ -217,10 +220,17 @@ void US_WeaponPrimaryAbility::ApplyAmmoCost(const FGameplayAbilitySpecHandle Han
 
 void US_WeaponPrimaryAbility::ApplyAbilityCooldown(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
 {
-    Super::ApplyCooldown(Handle, ActorInfo, ActivationInfo); // This uses the CooldownGameplayEffectClass from UGameplayAbility
-    UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ApplyAbilityCooldown: %s - Cooldown applied (using CooldownGE from GameplayAbility base or derived)."), *GetNameSafe(this));
+    const UGameplayEffect* CooldownGE = GetCooldownGameplayEffect();
+    if (CooldownGE)
+    {
+        ApplyGameplayEffectToOwner(Handle, ActorInfo, ActivationInfo, CooldownGE, GetAbilityLevel());
+        UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ApplyAbilityCooldown: %s - Applied Cooldown GE %s."), *GetNameSafe(this), *CooldownGE->GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponPrimaryAbility::ApplyAbilityCooldown: %s - No CooldownGameplayEffect set for this ability."), *GetNameSafe(this));
+    }
 }
-
 
 void US_WeaponPrimaryAbility::OnFireMontageCompleted()
 {
