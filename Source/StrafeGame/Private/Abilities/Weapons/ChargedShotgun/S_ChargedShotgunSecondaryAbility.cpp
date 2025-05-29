@@ -52,20 +52,6 @@ bool US_ChargedShotgunSecondaryAbility::CanActivateAbility(const FGameplayAbilit
 void US_ChargedShotgunSecondaryAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
     Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
-    ResetAbilityState();
-
-    WaitInputReleaseTask = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true);
-    if (WaitInputReleaseTask)
-    {
-        WaitInputReleaseTask->ReadyForActivation();
-    }
-    else
-    {
-        CancelAbility(Handle, ActorInfo, ActivationInfo, true);
-        return;
-    }
-
-    StartSecondaryCharge();
 }
 
 void US_ChargedShotgunSecondaryAbility::StartSecondaryCharge()
@@ -152,6 +138,26 @@ void US_ChargedShotgunSecondaryAbility::InputReleased(const FGameplayAbilitySpec
     {
         EndAbility(Handle, ActorInfo, ActivationInfo, false, true);
     }
+}
+
+void US_ChargedShotgunSecondaryAbility::PerformWeaponSecondaryFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
+{
+    // This function is now called from US_WeaponSecondaryAbility::ActivateAbility after it Commits.
+    // Implement the charging logic here.
+    ResetAbilityState();
+
+    WaitInputReleaseTask = UAbilityTask_WaitInputRelease::WaitInputRelease(this, true);
+    if (WaitInputReleaseTask)
+    {
+        WaitInputReleaseTask->ReadyForActivation();
+    }
+    else
+    {
+        CancelAbility(Handle, ActorInfo, ActivationInfo, true);
+        return;
+    }
+
+    StartSecondaryCharge();
 }
 
 void US_ChargedShotgunSecondaryAbility::AttemptFireOverchargedShot()
