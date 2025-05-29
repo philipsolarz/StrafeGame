@@ -1,12 +1,14 @@
+// Source/StrafeGame/Private/Abilities/Weapons/StickyGrenadeLauncher/S_StickyLauncherPrimaryAbility.cpp
 #include "Abilities/Weapons/StickyGrenadeLauncher/S_StickyLauncherPrimaryAbility.h"
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncher.h"
-#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncherDataAsset.h" // Correct path for specific DA
-#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h"
+#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncherDataAsset.h"
+#include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h" // Should be included if DA might not have it
 #include "Player/S_Character.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Controller.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
-#include "GameplayEffectTypes.h" 
+#include "GameplayEffectTypes.h"
+#include "Abilities/GameplayAbility.h"
 
 US_StickyGrenadeLauncherPrimaryAbility::US_StickyGrenadeLauncherPrimaryAbility()
 {
@@ -36,13 +38,16 @@ bool US_StickyGrenadeLauncherPrimaryAbility::CanActivateAbility(const FGameplayA
 
     if (!Launcher || !LauncherData || !LauncherData->ProjectileClass)
     {
+        UE_LOG(LogTemp, Warning, TEXT("US_StickyGrenadeLauncherPrimaryAbility::CanActivateAbility: Invalid Launcher, Data, or ProjectileClass."));
         return false;
     }
 
     if (Launcher->GetActiveProjectiles().Num() >= LauncherData->MaxActiveProjectiles)
     {
+        UE_LOG(LogTemp, Log, TEXT("US_StickyGrenadeLauncherPrimaryAbility::CanActivateAbility: Max active projectiles (%d) reached for %s."), LauncherData->MaxActiveProjectiles, *Launcher->GetName());
         if (OptionalRelevantTags)
         {
+            // Example: Add a tag to inform UI or other systems. Ensure this tag exists in your project.
             // OptionalRelevantTags->AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Feedback.MaxProjectilesReached")));
         }
         return false;
@@ -59,24 +64,25 @@ void US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAb
 
     if (!Character || !Launcher || !LauncherData || !LauncherData->ProjectileClass || !ASC)
     {
+        UE_LOG(LogTemp, Error, TEXT("US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire: Precondition failed."));
         CancelAbility(Handle, ActorInfo, ActivationInfo, true);
         return;
     }
+    UE_LOG(LogTemp, Log, TEXT("US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire for %s"), *Launcher->GetName());
 
     FVector FireStartLocation;
-    FRotator CamRot; // CORRECTED
+    FRotator CamRot;
     FVector FireDirection;
     AController* Controller = Character->GetController();
     if (Controller)
     {
-        FVector MuzzleSocketLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName); // CORRECTED
+        FVector MuzzleSocketLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName);
         FVector CamLoc;
-        Controller->GetPlayerViewPoint(CamLoc, CamRot); // CORRECTED
+        Controller->GetPlayerViewPoint(CamLoc, CamRot);
         FireDirection = CamRot.Vector();
 
-        const float MaxTraceDist = LauncherData->MaxAimTraceRange > 0.f ? LauncherData->MaxAimTraceRange : 100000.0f; // CORRECTED
+        const float MaxTraceDist = LauncherData->MaxAimTraceRange > 0.f ? LauncherData->MaxAimTraceRange : 100000.0f;
         FVector CamTraceEnd = CamLoc + FireDirection * MaxTraceDist;
-
         FHitResult CameraTraceHit;
         FCollisionQueryParams QueryParams;
         QueryParams.AddIgnoredActor(Character);
@@ -92,40 +98,43 @@ void US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAb
     }
     else
     {
-        FireStartLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName); // CORRECTED
+        FireStartLocation = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName);
         FireDirection = Launcher->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = CurrentEventData; // CORRECTED
-    Launcher->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), 0.f, 0.f, LauncherData->ProjectileClass);
+    // Weapon actor (AS_StickyGrenadeLauncher) will use its DataAsset to get ProjectileClass, LaunchSpeed, etc.
+    Launcher->ExecutePrimaryFire(FireStartLocation, FireDirection, CurrentEventData ? *CurrentEventData : FGameplayEventData());
 
-    UAbilityTask_PlayMontageAndWait* MontageTask = PlayWeaponMontage(LauncherData->FireMontage);
-    if (MontageTask)
+    FireMontageTask = PlayWeaponMontage(LauncherData->FireMontage); // Corrected: Use FireMontageTask member
+    if (FireMontageTask)
     {
-        MontageTask->OnCompleted.AddDynamic(this, &US_StickyGrenadeLauncherPrimaryAbility::OnFireMontageCompleted);
-        MontageTask->OnInterrupted.AddDynamic(this, &US_StickyGrenadeLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
-        MontageTask->OnCancelled.AddDynamic(this, &US_StickyGrenadeLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
-        MontageTask->ReadyForActivation();
+        FireMontageTask->OnCompleted.AddDynamic(this, &US_StickyGrenadeLauncherPrimaryAbility::OnFireMontageCompleted);
+        FireMontageTask->OnInterrupted.AddDynamic(this, &US_StickyGrenadeLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
+        FireMontageTask->OnCancelled.AddDynamic(this, &US_StickyGrenadeLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
+        FireMontageTask->ReadyForActivation();
+        UE_LOG(LogTemp, Log, TEXT("US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire: Fire montage started."));
     }
     else
     {
+        UE_LOG(LogTemp, Log, TEXT("US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire: No fire montage. Ending ability."));
         EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
     }
 
     if (LauncherData->MuzzleFlashCueTag.IsValid())
     {
         FGameplayCueParameters CueParams;
-        CueParams.Location = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName); // CORRECTED
+        CueParams.Location = Launcher->GetWeaponMeshComponent()->GetSocketLocation(LauncherData->MuzzleFlashSocketName);
         CueParams.Normal = FireDirection;
         CueParams.Instigator = Character;
         CueParams.EffectCauser = Launcher;
         ASC->ExecuteGameplayCue(LauncherData->MuzzleFlashCueTag, CueParams);
+        UE_LOG(LogTemp, Log, TEXT("US_StickyGrenadeLauncherPrimaryAbility::PerformWeaponFire: Executed MuzzleFlashCue %s"), *LauncherData->MuzzleFlashCueTag.ToString());
     }
 
-    if (!MontageTask)
+    if (!FireMontageTask)
     {
         EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
     }
 }
 
-// OnFireMontageCompleted and OnFireMontageInterruptedOrCancelled are inherited.
+// OnFireMontageCompleted and OnFireMontageInterruptedOrCancelled are inherited from US_WeaponPrimaryAbility.

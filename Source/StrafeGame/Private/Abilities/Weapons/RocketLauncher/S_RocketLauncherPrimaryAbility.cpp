@@ -1,13 +1,14 @@
+// Source/StrafeGame/Private/Abilities/Weapons/RocketLauncher/S_RocketLauncherPrimaryAbility.cpp
 #include "Abilities/Weapons/RocketLauncher/S_RocketLauncherPrimaryAbility.h"
 #include "Weapons/RocketLauncher/S_RocketLauncher.h"
 #include "Weapons/RocketLauncher/S_RocketLauncherDataAsset.h"
-#include "Weapons/RocketLauncher/S_RocketProjectile.h"
+#include "Weapons/RocketLauncher/S_RocketProjectile.h" // Should be included if DA might not have it
 #include "Player/S_Character.h"
 #include "AbilitySystemComponent.h"
 #include "GameFramework/Controller.h"
-#include "Kismet/GameplayStatics.h" 
+#include "Kismet/GameplayStatics.h"
 #include "Abilities/Tasks/AbilityTask_PlayMontageAndWait.h"
-#include "GameplayEffectTypes.h" 
+#include "GameplayEffectTypes.h"
 #include "Abilities/GameplayAbility.h"
 
 US_RocketLauncherPrimaryAbility::US_RocketLauncherPrimaryAbility()
@@ -34,9 +35,9 @@ bool US_RocketLauncherPrimaryAbility::CanActivateAbility(const FGameplayAbilityS
     }
 
     const US_RocketLauncherDataAsset* RocketData = GetRocketLauncherData();
-    if (!RocketData || !RocketData->ProjectileClass)
+    if (!RocketData || !RocketData->ProjectileClass) // Check if the DataAsset specifies a projectile
     {
-        UE_LOG(LogTemp, Warning, TEXT("US_RocketLauncherPrimaryAbility: No ProjectileClass defined in RocketLauncherDataAsset."));
+        UE_LOG(LogTemp, Warning, TEXT("US_RocketLauncherPrimaryAbility::CanActivateAbility: No ProjectileClass defined in RocketLauncherDataAsset."));
         return false;
     }
     return true;
@@ -51,30 +52,29 @@ void US_RocketLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySp
 
     if (!Character || !RocketLauncher || !RocketLauncherData || !RocketLauncherData->ProjectileClass || !ASC)
     {
+        UE_LOG(LogTemp, Error, TEXT("US_RocketLauncherPrimaryAbility::PerformWeaponFire: Precondition failed."));
         CancelAbility(Handle, ActorInfo, ActivationInfo, true);
         return;
     }
+    UE_LOG(LogTemp, Log, TEXT("US_RocketLauncherPrimaryAbility::PerformWeaponFire for %s"), *RocketLauncher->GetName());
 
     FVector FireStartLocation;
-    FRotator CamRot; // CORRECTED
+    FRotator CamRot;
     FVector FireDirection;
     AController* Controller = Character->GetController();
     if (Controller)
     {
-        FVector MuzzleSocketLocation = RocketLauncher->GetWeaponMeshComponent()->GetSocketLocation(RocketLauncherData->MuzzleFlashSocketName); // CORRECTED
-
+        FVector MuzzleSocketLocation = RocketLauncher->GetWeaponMeshComponent()->GetSocketLocation(RocketLauncherData->MuzzleFlashSocketName);
         FVector CamLoc;
-        Controller->GetPlayerViewPoint(CamLoc, CamRot); // CORRECTED
+        Controller->GetPlayerViewPoint(CamLoc, CamRot);
         FireDirection = CamRot.Vector();
 
-        const float MaxTraceDist = RocketLauncherData->MaxAimTraceRange > 0.f ? RocketLauncherData->MaxAimTraceRange : 100000.0f; // CORRECTED (using MaxAimTraceRange from base DA)
+        const float MaxTraceDist = RocketLauncherData->MaxAimTraceRange > 0.f ? RocketLauncherData->MaxAimTraceRange : 100000.0f;
         FVector CamTraceEnd = CamLoc + FireDirection * MaxTraceDist;
-
         FHitResult CameraTraceHit;
         FCollisionQueryParams QueryParams;
         QueryParams.AddIgnoredActor(Character);
         QueryParams.AddIgnoredActor(RocketLauncher);
-
         FireStartLocation = MuzzleSocketLocation;
         if (GetWorld()->LineTraceSingleByChannel(CameraTraceHit, CamLoc, CamTraceEnd, ECC_Visibility, QueryParams))
         {
@@ -86,40 +86,45 @@ void US_RocketLauncherPrimaryAbility::PerformWeaponFire(const FGameplayAbilitySp
     }
     else
     {
-        FireStartLocation = RocketLauncher->GetWeaponMeshComponent()->GetSocketLocation(RocketLauncherData->MuzzleFlashSocketName); // CORRECTED
+        FireStartLocation = RocketLauncher->GetWeaponMeshComponent()->GetSocketLocation(RocketLauncherData->MuzzleFlashSocketName);
         FireDirection = RocketLauncher->GetActorForwardVector();
     }
 
-    const FGameplayEventData* AbilityTriggerData = CurrentEventData; // CORRECTED
-    RocketLauncher->ExecuteFire(FireStartLocation, FireDirection, AbilityTriggerData ? *AbilityTriggerData : FGameplayEventData(), 0.f, 0.f, RocketLauncherData->ProjectileClass);
+    // Weapon actor (AS_RocketLauncher) will use its own DataAsset to get ProjectileClass, LaunchSpeed, etc.
+    RocketLauncher->ExecutePrimaryFire(FireStartLocation, FireDirection, CurrentEventData ? *CurrentEventData : FGameplayEventData());
 
-    UAbilityTask_PlayMontageAndWait* MontageTask = PlayWeaponMontage(RocketLauncherData->FireMontage);
-    if (MontageTask)
+    FireMontageTask = PlayWeaponMontage(RocketLauncherData->FireMontage); // Corrected: Use FireMontageTask member
+    if (FireMontageTask)
     {
-        MontageTask->OnCompleted.AddDynamic(this, &US_RocketLauncherPrimaryAbility::OnFireMontageCompleted);
-        MontageTask->OnInterrupted.AddDynamic(this, &US_RocketLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
-        MontageTask->OnCancelled.AddDynamic(this, &US_RocketLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
-        MontageTask->ReadyForActivation();
+        FireMontageTask->OnCompleted.AddDynamic(this, &US_RocketLauncherPrimaryAbility::OnFireMontageCompleted);
+        FireMontageTask->OnInterrupted.AddDynamic(this, &US_RocketLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
+        FireMontageTask->OnCancelled.AddDynamic(this, &US_RocketLauncherPrimaryAbility::OnFireMontageInterruptedOrCancelled);
+        FireMontageTask->ReadyForActivation();
+        UE_LOG(LogTemp, Log, TEXT("US_RocketLauncherPrimaryAbility::PerformWeaponFire: Fire montage started."));
     }
     else
     {
-        EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+        UE_LOG(LogTemp, Log, TEXT("US_RocketLauncherPrimaryAbility::PerformWeaponFire: No fire montage. Ending ability."));
+        EndAbility(Handle, ActorInfo, ActivationInfo, false, false); // End immediately if no montage
     }
 
     if (RocketLauncherData->MuzzleFlashCueTag.IsValid())
     {
         FGameplayCueParameters CueParams;
-        CueParams.Location = RocketLauncher->GetWeaponMeshComponent()->GetSocketLocation(RocketLauncherData->MuzzleFlashSocketName); // CORRECTED
+        CueParams.Location = RocketLauncher->GetWeaponMeshComponent()->GetSocketLocation(RocketLauncherData->MuzzleFlashSocketName);
         CueParams.Normal = FireDirection;
         CueParams.Instigator = Character;
         CueParams.EffectCauser = RocketLauncher;
         ASC->ExecuteGameplayCue(RocketLauncherData->MuzzleFlashCueTag, CueParams);
+        UE_LOG(LogTemp, Log, TEXT("US_RocketLauncherPrimaryAbility::PerformWeaponFire: Executed MuzzleFlashCue %s"), *RocketLauncherData->MuzzleFlashCueTag.ToString());
     }
 
-    if (!MontageTask)
+    // Do not end ability here if montage is playing. OnFireMontageCompleted/Cancelled will handle it.
+    if (!FireMontageTask) // Double check, if task failed to activate or was null
     {
         EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
     }
 }
 
 // OnFireMontageCompleted and OnFireMontageInterruptedOrCancelled are inherited from US_WeaponPrimaryAbility
+// and will call EndAbility.

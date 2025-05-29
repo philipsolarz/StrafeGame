@@ -1,8 +1,8 @@
+// Source/StrafeGame/Public/Weapons/S_Weapon.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-//#include "GameplayEffectTypes.h" // For FGameplayEventData
 #include "Abilities/GameplayAbilityTypes.h"
 #include "S_Weapon.generated.h"
 
@@ -10,7 +10,7 @@
 class USkeletalMeshComponent;
 class US_WeaponDataAsset;
 class AS_Character;
-class AS_Projectile; // Forward declare
+class AS_Projectile;
 
 UENUM(BlueprintType)
 enum class EWeaponState : uint8
@@ -59,21 +59,24 @@ public:
     USkeletalMeshComponent* GetWeaponMeshComponent() const { return WeaponMesh; }
 
     /**
-     * Called by GameplayAbilities to perform the actual firing logic (hitscan trace or projectile spawn).
-     * This will be implemented differently in AS_HitscanWeapon and AS_ProjectileWeapon.
-     * The ability provides all necessary parameters like aim direction, instigator, etc.
-     *
+     * Called by GameplayAbilities to perform the primary firing logic.
      * @param FireStartLocation The starting point for the trace or projectile.
      * @param FireDirection The normalized direction of the fire.
      * @param EventData Optional FGameplayEventData passed from the ability.
-     * @param HitscanSpread Angle in degrees for hitscan spread (0 for perfect accuracy). Relevant for HitscanWeapon.
-     * @param HitscanRange Max range for hitscan traces. Relevant for HitscanWeapon.
-     * @param ProjectileClass TSubclass of projectile to spawn. Relevant for ProjectileWeapon.
      */
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Weapon|Firing")
-    void ExecuteFire(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread = 0.f, float HitscanRange = 10000.f, TSubclassOf<AS_Projectile> ProjectileClass = nullptr); // MODIFIED
-    virtual void ExecuteFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData, float HitscanSpread, float HitscanRange, TSubclassOf<AS_Projectile> ProjectileClass); // MODIFIED
+    void ExecutePrimaryFire(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData);
+    virtual void ExecutePrimaryFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData);
 
+    /**
+     * Called by GameplayAbilities to perform the secondary firing logic.
+     * @param FireStartLocation The starting point for the trace or projectile.
+     * @param FireDirection The normalized direction of the fire.
+     * @param EventData Optional FGameplayEventData passed from the ability.
+     */
+    UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Weapon|Firing")
+    void ExecuteSecondaryFire(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData);
+    virtual void ExecuteSecondaryFire_Implementation(const FVector& FireStartLocation, const FVector& FireDirection, const FGameplayEventData& EventData);
 
 protected:
     UPROPERTY(Transient, ReplicatedUsing = OnRep_OwnerCharacter)
