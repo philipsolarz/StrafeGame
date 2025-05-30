@@ -1,15 +1,17 @@
 // Source/StrafeGame/Private/Player/S_Character.cpp
 #include "Player/S_Character.h"
 #include "InputMappingContext.h"
-#include "Player/S_PlayerState.h" 
+#include "Player/S_PlayerState.h"
 #include "Player/Components/S_WeaponInventoryComponent.h"
-#include "Player/Components/S_CharacterMovementComponent.h" 
+#include "Player/Components/S_CharacterMovementComponent.h"
 #include "Weapons/S_Weapon.h"
 #include "Weapons/S_WeaponDataAsset.h"
-#include "Abilities/Weapons/S_WeaponPrimaryAbility.h" 
+#include "Abilities/Weapons/S_WeaponPrimaryAbility.h"
 #include "Abilities/Weapons/S_WeaponSecondaryAbility.h"
 
 #include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h" // Added
+#include "Components/SkeletalMeshComponent.h" // Added
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -18,24 +20,52 @@
 #include "Engine/LocalPlayer.h"
 #include "Net/UnrealNetwork.h"
 
-#include "AbilitySystemComponent.h" 
-#include "Player/Attributes/S_AttributeSet.h" 
+#include "AbilitySystemComponent.h"
+#include "Player/Attributes/S_AttributeSet.h"
 #include "GameplayAbilitySpec.h"
 #include "GameplayTagContainer.h"
 
 AS_Character::AS_Character(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer.SetDefaultSubobjectClass<US_CharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
-    PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bCanEverTick = true; // Enable if you need Tick, e.g., for custom camera smoothing
     bHasInitializedWithPlayerState = false;
 
+    // First Person Camera
     FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCameraComponent"));
     FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
-    FirstPersonCameraComponent->SetRelativeLocation(FVector(-10.f, 0.f, 60.f));
+    FirstPersonCameraComponent->SetRelativeLocation(FVector(-10.f, 0.f, 60.f)); // Adjust as needed
     FirstPersonCameraComponent->bUsePawnControlRotation = true;
 
+    // First Person Mesh (Arms)
+    FP_Mesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FP_Mesh"));
+    FP_Mesh->SetupAttachment(FirstPersonCameraComponent);
+    FP_Mesh->SetOnlyOwnerSee(true); // Only visible to the local player
+    FP_Mesh->SetCastShadow(false);  // Usually, FP arms don't cast shadows
+    FP_Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); // Typically no collision for FP arms
+
+    // Third Person Camera Boom (SpringArm)
+    ThirdPersonSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("ThirdPersonSpringArm"));
+    ThirdPersonSpringArm->SetupAttachment(RootComponent);
+    ThirdPersonSpringArm->TargetArmLength = 300.0f;    // Distance from player
+    ThirdPersonSpringArm->bUsePawnControlRotation = true; // Rotate arm with controller
+    ThirdPersonSpringArm->SocketOffset = FVector(0.f, 50.f, 70.f); // Offset from player's root
+
+    // Third Person Camera
+    ThirdPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("ThirdPersonCameraComponent"));
+    ThirdPersonCameraComponent->SetupAttachment(ThirdPersonSpringArm, USpringArmComponent::SocketName);
+    ThirdPersonCameraComponent->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
+
+    // Weapon Inventory
     WeaponInventoryComponent = CreateDefaultSubobject<US_WeaponInventoryComponent>(TEXT("WeaponInventoryComponent"));
     WeaponInventoryComponent->SetIsReplicated(true);
+
+    // Default view state
+    bIsFirstPersonView = true;
+
+    // Default Socket Names (can be overridden in Blueprint)
+    FirstPersonWeaponSocketName = FName("GripPoint_FP"); // Example name, ensure this socket exists on your FP_Mesh
+    ThirdPersonWeaponSocketName = FName("WeaponSocket"); // Your existing TP socket name
 
     CurrentPrimaryAbilityInputID = -1;
     CurrentSecondaryAbilityInputID = -1;
@@ -55,6 +85,21 @@ void AS_Character::PostInitializeComponents()
     {
         WeaponInventoryComponent->OnWeaponEquippedDelegate.AddDynamic(this, &AS_Character::HandleWeaponEquipped);
     }
+
+    // Initial camera setup
+    if (IsLocallyControlled()) // Only for local player
+    {
+        if (bIsFirstPersonView)
+        {
+            FirstPersonCameraComponent->Activate();
+            ThirdPersonCameraComponent->Deactivate();
+        }
+        else
+        {
+            ThirdPersonCameraComponent->Activate();
+            FirstPersonCameraComponent->Deactivate();
+        }
+    }
 }
 
 void AS_Character::BeginPlay()
@@ -73,10 +118,11 @@ void AS_Character::BeginPlay()
             if (WeaponMappingContext)
             {
                 UE_LOG(LogTemp, Log, TEXT("AS_Character::BeginPlay: %s - Adding WeaponMappingContext"), *GetNameSafe(this));
-                Subsystem->AddMappingContext(WeaponMappingContext, 1);
+                Subsystem->AddMappingContext(WeaponMappingContext, 1); // Ensure different priority if needed
             }
         }
     }
+    // RefreshActiveMeshesAndWeaponAttachment(); // Initial setup called in PossessedBy/OnRep_PlayerState after ASC init
 }
 
 void AS_Character::Tick(float DeltaTime)
@@ -109,6 +155,10 @@ void AS_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         }
         if (NextWeaponAction) EnhancedInputComponent->BindAction(NextWeaponAction, ETriggerEvent::Started, this, &AS_Character::Input_NextWeapon);
         if (PreviousWeaponAction) EnhancedInputComponent->BindAction(PreviousWeaponAction, ETriggerEvent::Started, this, &AS_Character::Input_PreviousWeapon);
+
+        // Added: Bind ToggleCameraViewAction
+        if (ToggleCameraViewAction) EnhancedInputComponent->BindAction(ToggleCameraViewAction, ETriggerEvent::Started, this, &AS_Character::Input_ToggleCameraView);
+
         UE_LOG(LogTemp, Log, TEXT("AS_Character::SetupPlayerInputComponent: %s - Enhanced input bindings complete."), *GetNameSafe(this));
     }
 }
@@ -130,20 +180,22 @@ void AS_Character::PossessedBy(AController* NewController)
 {
     Super::PossessedBy(NewController);
     UE_LOG(LogTemp, Log, TEXT("AS_Character::PossessedBy: %s possessed by %s. IsServer: %d"), *GetNameSafe(this), *GetNameSafe(NewController), HasAuthority());
-    InitializeWithPlayerState();
+    InitializeWithPlayerState(); // Initializes GAS and then calls RefreshActiveMeshesAndWeaponAttachment
 }
 
 void AS_Character::OnRep_Controller()
 {
     Super::OnRep_Controller();
     UE_LOG(LogTemp, Log, TEXT("AS_Character::OnRep_Controller: %s new controller %s. IsClient: %d"), *GetNameSafe(this), *GetNameSafe(GetController()), !HasAuthority());
+    // InitializeWithPlayerState could be called here too if PlayerState might already be set,
+    // but OnRep_PlayerState is usually the more reliable point for clients.
 }
 
 void AS_Character::OnRep_PlayerState()
 {
     Super::OnRep_PlayerState();
     UE_LOG(LogTemp, Log, TEXT("AS_Character::OnRep_PlayerState: %s new PlayerState %s. IsClient: %d"), *GetNameSafe(this), *GetNameSafe(GetPlayerState()), !HasAuthority());
-    InitializeWithPlayerState();
+    InitializeWithPlayerState(); // Initializes GAS and then calls RefreshActiveMeshesAndWeaponAttachment
 }
 
 void AS_Character::InitializeWithPlayerState()
@@ -162,14 +214,19 @@ void AS_Character::InitializeWithPlayerState()
 
             BindToPlayerStateAttributes();
 
-            if (WeaponInventoryComponent)
-            {
-                UE_LOG(LogTemp, Log, TEXT("AS_Character::InitializeWithPlayerState: %s - Initial HandleWeaponEquipped call."), *GetNameSafe(this));
-                HandleWeaponEquipped(WeaponInventoryComponent->GetCurrentWeapon(), nullptr);
-            }
-
             bHasInitializedWithPlayerState = true;
             UE_LOG(LogTemp, Log, TEXT("S_Character %s initialized with PlayerState %s. bHasInitializedWithPlayerState = true"), *GetName(), *PS->GetName());
+
+            // Now that ASC is up, refresh meshes and weapon (which might grant abilities)
+            RefreshActiveMeshesAndWeaponAttachment();
+
+            // Initial weapon equip and ability granting if needed
+            // This HandleWeaponEquipped will use the updated view state from RefreshActiveMeshes.
+            if (WeaponInventoryComponent)
+            {
+                UE_LOG(LogTemp, Log, TEXT("AS_Character::InitializeWithPlayerState: %s - Initial HandleWeaponEquipped call after ASC init."), *GetNameSafe(this));
+                HandleWeaponEquipped(WeaponInventoryComponent->GetCurrentWeapon(), nullptr);
+            }
         }
         else
         {
@@ -187,8 +244,8 @@ void AS_Character::BindToPlayerStateAttributes()
 void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeapon)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - NewWeapon: %s, OldWeapon: %s. ASC Valid: %d. HasAuthority: %d"), 
-         *GetNameSafe(this), *GetNameSafe(NewWeapon), *GetNameSafe(OldWeapon), ASC != nullptr, HasAuthority());
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - NewWeapon: %s, OldWeapon: %s. ASC Valid: %d. HasAuthority: %d"),
+        *GetNameSafe(this), *GetNameSafe(NewWeapon), *GetNameSafe(OldWeapon), ASC != nullptr, HasAuthority());
 
     if (!ASC)
     {
@@ -267,12 +324,68 @@ void AS_Character::HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeap
     {
         UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleWeaponEquipped: %s - NewWeapon is null, no abilities to grant."), *GetNameSafe(this));
     }
+    // After abilities are handled, refresh the weapon attachment based on current view
+    RefreshActiveMeshesAndWeaponAttachment();
 }
 
 
 AS_Weapon* AS_Character::GetCurrentWeapon() const
 {
     return WeaponInventoryComponent ? WeaponInventoryComponent->GetCurrentWeapon() : nullptr;
+}
+
+void AS_Character::RefreshActiveMeshesAndWeaponAttachment()
+{
+    AS_Weapon* CurrentWeapon = GetCurrentWeapon();
+    USkeletalMeshComponent* TP_Mesh = GetMesh(); // This is our TP_Mesh
+
+    if (IsLocallyControlled())
+    {
+        if (bIsFirstPersonView)
+        {
+            if (TP_Mesh) TP_Mesh->SetOwnerNoSee(true);
+            if (FP_Mesh) FP_Mesh->SetVisibility(true);
+
+            if (CurrentWeapon && CurrentWeapon->GetWeaponMeshComponent() && FP_Mesh)
+            {
+                CurrentWeapon->GetWeaponMeshComponent()->AttachToComponent(FP_Mesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, FirstPersonWeaponSocketName);
+                UE_LOG(LogTemp, Log, TEXT("AS_Character %s: Attached weapon %s to FP_Mesh socket %s."), *GetName(), *CurrentWeapon->GetName(), *FirstPersonWeaponSocketName.ToString());
+            }
+            if (FirstPersonCameraComponent) FirstPersonCameraComponent->Activate();
+            if (ThirdPersonCameraComponent) ThirdPersonCameraComponent->Deactivate();
+        }
+        else // Locally controlled, Third-Person View
+        {
+            if (TP_Mesh) TP_Mesh->SetOwnerNoSee(false);
+            if (FP_Mesh) FP_Mesh->SetVisibility(false);
+
+            if (CurrentWeapon && CurrentWeapon->GetWeaponMeshComponent() && TP_Mesh)
+            {
+                CurrentWeapon->GetWeaponMeshComponent()->AttachToComponent(TP_Mesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, ThirdPersonWeaponSocketName);
+                UE_LOG(LogTemp, Log, TEXT("AS_Character %s: Attached weapon %s to TP_Mesh socket %s (Local TP View)."), *GetName(), *CurrentWeapon->GetName(), *ThirdPersonWeaponSocketName.ToString());
+            }
+            if (ThirdPersonCameraComponent) ThirdPersonCameraComponent->Activate();
+            if (FirstPersonCameraComponent) FirstPersonCameraComponent->Deactivate();
+        }
+    }
+    else // Simulated Proxy (other players)
+    {
+        if (TP_Mesh) TP_Mesh->SetOwnerNoSee(false); // Should be visible
+        if (FP_Mesh) FP_Mesh->SetVisibility(false);  // Should not be visible
+
+        // For simulated proxies, the weapon attachment is typically handled by AS_Weapon's OnRep_OwnerCharacter or Equip logic on server,
+        // attaching to the character's main mesh (TP_Mesh).
+        // We can ensure it here too if needed, but standard replication should handle it.
+        if (CurrentWeapon && CurrentWeapon->GetWeaponMeshComponent() && TP_Mesh)
+        {
+            // Check if it's already attached to the correct component, to avoid redundant calls if OnRep_OwnerCharacter handles it.
+            if (CurrentWeapon->GetWeaponMeshComponent()->GetAttachParent() != TP_Mesh)
+            {
+                CurrentWeapon->GetWeaponMeshComponent()->AttachToComponent(TP_Mesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale, ThirdPersonWeaponSocketName);
+                UE_LOG(LogTemp, Log, TEXT("AS_Character %s (Proxy): Attached weapon %s to TP_Mesh socket %s."), *GetName(), *CurrentWeapon->GetName(), *ThirdPersonWeaponSocketName.ToString());
+            }
+        }
+    }
 }
 
 void AS_Character::Input_Move(const FInputActionValue& InputActionValue)
@@ -309,6 +422,9 @@ void AS_Character::Input_Jump(const FInputActionValue& InputActionValue)
         // FGameplayTag JumpTag = FGameplayTag::RequestGameplayTag(FName("Ability.Action.Jump"));
         // ASC->TryActivateAbilitiesByTag(FGameplayTagContainer(JumpTag));
         Super::Jump(); // For now, standard jump
+    }
+    else {
+        Super::Jump();
     }
 }
 
@@ -370,14 +486,36 @@ void AS_Character::Input_PreviousWeapon(const FInputActionValue& InputActionValu
     if (WeaponInventoryComponent) WeaponInventoryComponent->ServerRequestPreviousWeapon();
 }
 
+void AS_Character::Input_ToggleCameraView(const FInputActionValue& InputActionValue)
+{
+    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_ToggleCameraView: %s. Current FP: %d"), *GetNameSafe(this), bIsFirstPersonView);
+    if (IsLocallyControlled()) // Only local player can toggle their own camera
+    {
+        bIsFirstPersonView = !bIsFirstPersonView;
+        RefreshActiveMeshesAndWeaponAttachment(); // This will also activate/deactivate cameras
+        UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_ToggleCameraView: Toggled to FP: %d"), bIsFirstPersonView);
+    }
+}
+
 void AS_Character::HandleDeath()
 {
     UE_LOG(LogTemp, Log, TEXT("AS_Character::HandleDeath: %s executing death logic."), *GetNameSafe(this));
     K2_OnDeath();
 
+    USkeletalMeshComponent* TP_Mesh = GetMesh();
+
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-    GetMesh()->SetSimulatePhysics(true);
+    if (TP_Mesh)
+    {
+        TP_Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        TP_Mesh->SetSimulatePhysics(true);
+    }
+    if (FP_Mesh) // Ensure FP mesh is also handled
+    {
+        FP_Mesh->SetVisibility(false);
+        FP_Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    }
+
 
     GetCharacterMovement()->DisableMovement();
     GetCharacterMovement()->StopMovementImmediately();
