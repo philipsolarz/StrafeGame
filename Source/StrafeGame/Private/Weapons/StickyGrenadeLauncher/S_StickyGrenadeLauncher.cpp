@@ -46,23 +46,35 @@ bool AS_StickyGrenadeLauncher::DetonateOldestActiveSticky()
 
     if (ActiveProjectiles.Num() > 0)
     {
-        AS_StickyGrenadeProjectile* OldestSticky = nullptr;
+        AS_StickyGrenadeProjectile* OldestStuckSticky = nullptr;
+        // Iterate to find the first (oldest) active projectile that is a STUCK sticky grenade
         for (AS_Projectile* Proj : ActiveProjectiles)
         {
             if (Proj && !Proj->IsPendingKillPending()) // Ensure it's valid
             {
-                OldestSticky = Cast<AS_StickyGrenadeProjectile>(Proj);
-                if (OldestSticky) break; // Found the first valid sticky
+                AS_StickyGrenadeProjectile* StickyProj = Cast<AS_StickyGrenadeProjectile>(Proj);
+                if (StickyProj && StickyProj->IsStuckToSurface()) // MODIFIED: Check if it's stuck
+                {
+                    OldestStuckSticky = StickyProj;
+                    break;
+                }
             }
         }
 
-        if (OldestSticky)
+        if (OldestStuckSticky)
         {
-            UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher %s: Detonating sticky grenade %s"), *GetName(), *OldestSticky->GetName());
-            OldestSticky->Detonate(); // AS_Projectile handles unregistering itself
+            UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher %s: Detonating STUCK sticky grenade %s"), *GetName(), *OldestStuckSticky->GetName());
+            OldestStuckSticky->Detonate(); // AS_Projectile handles unregistering itself
             return true;
         }
+        else
+        {
+            UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher %s: No active STUCK stickies to detonate."), *GetName());
+        }
     }
-    UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher %s: No active stickies to detonate."), *GetName());
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("AS_StickyGrenadeLauncher %s: No active projectiles to detonate."), *GetName());
+    }
     return false;
 }

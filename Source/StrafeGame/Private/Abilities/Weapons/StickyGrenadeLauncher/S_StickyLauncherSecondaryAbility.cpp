@@ -1,3 +1,4 @@
+// Source/StrafeGame/Private/Abilities/Weapons/StickyGrenadeLauncher/S_StickyLauncherSecondaryAbility.cpp
 #include "Abilities/Weapons/StickyGrenadeLauncher/S_StickyLauncherSecondaryAbility.h"
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeLauncher.h"
 #include "Weapons/StickyGrenadeLauncher/S_StickyGrenadeProjectile.h" 
@@ -7,7 +8,7 @@
 
 US_StickyGrenadeLauncherSecondaryAbility::US_StickyGrenadeLauncherSecondaryAbility()
 {
-    InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor; // CORRECTED from NonInstanced due to warning
+    InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
     NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerInitiated;
 }
 
@@ -29,17 +30,17 @@ bool US_StickyGrenadeLauncherSecondaryAbility::CanActivateAbility(const FGamepla
         return false;
     }
 
-    bool bHasActiveStickies = false;
+    // Check if there's at least one STUCK sticky grenade
     for (const AS_Projectile* Proj : Launcher->GetActiveProjectiles())
     {
-        // Check if it's a sticky grenade and not pending kill
-        if (Proj && Cast<AS_StickyGrenadeProjectile>(Proj) && !Proj->IsPendingKillPending()) // IsPendingKill is AActor method
+        const AS_StickyGrenadeProjectile* StickyProj = Cast<AS_StickyGrenadeProjectile>(Proj);
+        if (StickyProj && !StickyProj->IsPendingKillPending() && StickyProj->IsStuckToSurface())
         {
-            bHasActiveStickies = true;
-            break;
+            return true; // Found a stuck sticky, ability can activate
         }
     }
-    return bHasActiveStickies;
+
+    return false; // No stuck stickies found
 }
 
 void US_StickyGrenadeLauncherSecondaryAbility::PerformWeaponSecondaryFire(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo)
@@ -47,6 +48,7 @@ void US_StickyGrenadeLauncherSecondaryAbility::PerformWeaponSecondaryFire(const 
     AS_StickyGrenadeLauncher* Launcher = GetStickyLauncher();
     if (Launcher && ActorInfo->IsNetAuthority())
     {
+        // DetonateOldestActiveSticky now only detonates if it's stuck
         Launcher->DetonateOldestActiveSticky();
     }
 

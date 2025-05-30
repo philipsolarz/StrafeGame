@@ -38,17 +38,23 @@ void AS_StickyGrenadeProjectile::GetLifetimeReplicatedProps(TArray<FLifetimeProp
 
 void AS_StickyGrenadeProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector HitNormal, const FHitResult& HitResult)
 {
-    if (!HasAuthority() || bIsStuck) // Only stick once, server authoritative
+    // K2_OnImpact is called by base AS_Projectile::OnHit, but sticky needs to decide to stick *before* that.
+    // However, for visual/audio on any hit *before* sticking, calling K2_OnImpact early might be desired here.
+    // For now, let's assume K2_OnStuckToSurfaceEffects is the primary BP hook for successful sticking.
+    // If general impact effects are needed even on non-sticking bounces, that can be added.
+
+    if (!HasAuthority() || bIsStuck)
     {
         if (bIsStuck && ProjectileMovementComponent && ProjectileMovementComponent->IsActive())
         {
-            // If already stuck but somehow still moving, stop it hard.
             ProjectileMovementComponent->StopMovementImmediately();
             ProjectileMovementComponent->Velocity = FVector::ZeroVector;
         }
-        // Don't call Super::OnHit if already stuck, as that might try to detonate or destroy.
+        // Do not call Super::OnHit if already stuck, as that might try to detonate or destroy.
         return;
     }
+
+    // K2_OnImpact(HitResult); // Optionally call this for any impact before stick/bounce decision
 
     bool bShouldAttemptStick = true;
     if (Cast<ACharacter>(OtherActor) && !bCanStickToCharacters)
@@ -56,36 +62,26 @@ void AS_StickyGrenadeProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* Oth
         bShouldAttemptStick = false;
     }
 
-    if (bShouldAttemptStick && OtherComp && OtherComp->IsSimulatingPhysics()) // Stick to physics objects
+    if (bShouldAttemptStick && OtherComp && OtherComp->IsSimulatingPhysics())
     {
-        // Stick to surface
         bIsStuck = true;
-        OnRep_IsStuck(); // Call OnRep manually on server
+        OnRep_IsStuck();
 
         if (ProjectileMovementComponent)
         {
             ProjectileMovementComponent->StopMovementImmediately();
             ProjectileMovementComponent->Velocity = FVector::ZeroVector;
-            ProjectileMovementComponent->SetUpdatedComponent(nullptr); // Stop trying to move
+            ProjectileMovementComponent->SetUpdatedComponent(nullptr);
         }
 
-        SetActorEnableCollision(true); // Keep collision for detonation radius checks, but it's not moving
+        SetActorEnableCollision(true);
 
-        // Attach with offset
         FVector AttachLocation = HitResult.ImpactPoint + HitResult.ImpactNormal * StickyAttachmentOffset;
         FAttachmentTransformRules AttachRules(EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, EAttachmentRule::KeepWorld, false);
-        // We want to attach to the component that was hit, maintaining world position initially, then let physics handle if it's a simulating component
         AttachToComponent(OtherComp, AttachRules, HitResult.BoneName);
-        // After attaching, we might want to adjust to keep the world transform to avoid snapping if OtherComp moves violently *during* attach
-        // For simplicity, KeepWorld on attach might be fine, or a Weld. Test what looks best.
-        // If OtherComp is static, this is simpler.
 
-        K2_OnStuckToSurfaceEffects(HitResult); // Call BP event for sticking effects
-
-        // Do NOT call Super::OnHit() here if sticking, because Super::OnHit might call Detonate() if bExplodeOnImpact is true
-        // (which it is for base AS_Projectile, but we set it false for Sticky in its constructor).
-        // If we wanted it to explode on impact IF IT FAILS TO STICK, then we'd call super.
-        return;
+        K2_OnStuckToSurfaceEffects(HitResult);
+        return; // Successfully stuck, do not proceed to Super::OnHit or other logic
     }
     else if (bShouldAttemptStick) // Hit something static or non-character we can stick to
     {
@@ -97,34 +93,36 @@ void AS_StickyGrenadeProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* Oth
             ProjectileMovementComponent->Velocity = FVector::ZeroVector;
         }
         SetActorLocation(HitResult.ImpactPoint + HitResult.ImpactNormal * StickyAttachmentOffset);
-        // Make it "kinematic" but still collidable for detonation
         CollisionComponent->SetSimulatePhysics(false);
         SetActorEnableCollision(true);
 
         K2_OnStuckToSurfaceEffects(HitResult);
-        return;
+        return; // Successfully stuck, do not proceed to Super::OnHit or other logic
     }
 
-    // If it didn't stick (e.g., hit a character and bCanStickToCharacters is false, or other condition)
-    // then let the default projectile OnHit logic (bounce, etc.) from AS_Projectile potentially take over,
-    // or just destroy it if that's preferred for non-sticking impacts.
-    // Since bExplodeOnImpact is false for stickies, Super::OnHit won't explode it.
-    // It might try to bounce if ProjectileMovementComponent is configured for it.
-    Super::OnHit(HitComp, OtherActor, OtherComp, HitNormal, HitResult);
+    // If it didn't stick (e.g., hit a character and bCanStickToCharacters is false, or other condition):
+    // Do NOT call Super::OnHit().
+    // Since bExplodeOnImpact is false and bShouldBounce is true for this projectile,
+    // the ProjectileMovementComponent will handle the bounce automatically after this function returns
+    // if a bounce is appropriate according to physics.
+    // No further action is needed here for the "fail to stick" case.
+    UE_LOG(LogTemp, Verbose, TEXT("AS_StickyGrenadeProjectile::OnHit: %s - Failed to stick. Will rely on bounce (bShouldBounce=%d) or lifespan."),
+        *GetNameSafe(this), ProjectileMovementComponent ? ProjectileMovementComponent->bShouldBounce : -1);
+
+    // Explicitly call K2_OnImpact if you want Blueprint effects for non-sticking impacts as well
+    // K2_OnImpact(HitResult); 
 }
 
 void AS_StickyGrenadeProjectile::OnRep_IsStuck()
 {
     if (bIsStuck)
     {
-        // Client-side reaction to sticking
         if (ProjectileMovementComponent)
         {
-            ProjectileMovementComponent->StopMovementImmediately(); // Ensure client also stops movement
+            ProjectileMovementComponent->StopMovementImmediately();
             ProjectileMovementComponent->Velocity = FVector::ZeroVector;
         }
-        // K2_OnStuckToSurfaceEffects can be called here too if needed for client-side effect initiation
-        // but usually the attachment replication handles the visual "sticking".
-        // It's mainly for server logic and immediate server-side BP effects.
+        // K2_OnStuckToSurfaceEffects is primarily for server-side initiation of effects or logic.
+        // Clients can have their own Blueprint BeginPlay/OnRep_IsStuck logic for visual effects if needed.
     }
 }

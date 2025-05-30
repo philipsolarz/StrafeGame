@@ -21,7 +21,7 @@ AS_Projectile::AS_Projectile()
     CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
     RootComponent = CollisionComponent;
     CollisionComponent->InitSphereRadius(10.0f);
-    CollisionComponent->SetCollisionProfileName(TEXT("Projectile"));
+    CollisionComponent->SetCollisionProfileName(TEXT("Projectile")); // Ensure this profile is set up correctly in project settings
     CollisionComponent->bReturnMaterialOnMove = true;
 
     ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovementComponent"));
@@ -60,8 +60,8 @@ void AS_Projectile::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 void AS_Projectile::BeginPlay()
 {
     Super::BeginPlay();
-    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::BeginPlay: %s - Instigator: %s, OwningWeapon: %s. HasAuthority: %d"), 
-         *GetNameSafe(this), *GetNameSafe(InstigatorPawn), *GetNameSafe(OwningWeapon), HasAuthority());
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::BeginPlay: %s - Instigator: %s, OwningWeapon: %s. HasAuthority: %d"),
+        *GetNameSafe(this), *GetNameSafe(InstigatorPawn), *GetNameSafe(OwningWeapon), HasAuthority());
 
     if (HasAuthority())
     {
@@ -113,25 +113,40 @@ void AS_Projectile::LifeSpanExpired()
 void AS_Projectile::InitializeProjectile(APawn* InInstigatorPawn, AS_ProjectileWeapon* InOwningWeapon, const US_ProjectileWeaponDataAsset* InWeaponDataAsset)
 {
     InstigatorPawn = InInstigatorPawn;
-    SetInstigator(InInstigatorPawn);
+    SetInstigator(InInstigatorPawn); // Sets the instigator for damage dealing and other systems
     OwningWeapon = InOwningWeapon;
     OwningWeaponDataAsset = InWeaponDataAsset;
 
-    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::InitializeProjectile: %s - Instigator: %s, Weapon: %s, WeaponDA: %s"), 
-         *GetNameSafe(this), *GetNameSafe(InInstigatorPawn), *GetNameSafe(InOwningWeapon), *GetNameSafe(InWeaponDataAsset));
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::InitializeProjectile: %s - Instigator: %s, Weapon: %s, WeaponDA: %s"),
+        *GetNameSafe(this), *GetNameSafe(InInstigatorPawn), *GetNameSafe(InOwningWeapon), *GetNameSafe(InWeaponDataAsset));
 
     if (InInstigatorPawn)
     {
-        SetOwner(InInstigatorPawn->GetController());
+        SetOwner(InInstigatorPawn->GetController()); // Projectile is "owned" by the controller of the instigator
+        if (CollisionComponent)
+        {
+            // Make the projectile ignore collision with the pawn that fired it.
+            CollisionComponent->IgnoreActorWhenMoving(InInstigatorPawn, true);
+            UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::InitializeProjectile: %s - Ignoring collision with InstigatorPawn: %s"), *GetNameSafe(this), *InInstigatorPawn->GetName());
+        }
     }
-    else if (InOwningWeapon) {
-        SetOwner(InOwningWeapon->GetOwner());
+    else if (InOwningWeapon)
+    {
+        SetOwner(InOwningWeapon->GetOwner()); // Fallback to weapon's owner if instigator pawn is somehow null
     }
+
+    if (InOwningWeapon && CollisionComponent)
+    {
+        // Also ignore the weapon actor itself.
+        CollisionComponent->IgnoreActorWhenMoving(InOwningWeapon, true);
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::InitializeProjectile: %s - Ignoring collision with OwningWeapon: %s"), *GetNameSafe(this), *InOwningWeapon->GetName());
+    }
+
 
     if (OwningWeaponDataAsset)
     {
-        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::InitializeProjectile: %s - Applying settings from DA: LaunchSpeed: %f, Lifespan: %f"), 
-             *GetNameSafe(this), OwningWeaponDataAsset->LaunchSpeed, OwningWeaponDataAsset->ProjectileLifeSpan);
+        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::InitializeProjectile: %s - Applying settings from DA: LaunchSpeed: %f, Lifespan: %f"),
+            *GetNameSafe(this), OwningWeaponDataAsset->LaunchSpeed, OwningWeaponDataAsset->ProjectileLifeSpan);
         if (OwningWeaponDataAsset->LaunchSpeed > 0 && ProjectileMovementComponent)
         {
             ProjectileMovementComponent->InitialSpeed = OwningWeaponDataAsset->LaunchSpeed;
@@ -144,17 +159,11 @@ void AS_Projectile::InitializeProjectile(APawn* InInstigatorPawn, AS_ProjectileW
 
 void AS_Projectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector HitNormal, const FHitResult& HitResult)
 {
-    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::OnHit: %s - Hit %s (Comp: %s). HasAuthority: %d, bExplodeOnImpact: %d"), 
-         *GetNameSafe(this), *GetNameSafe(OtherActor), *GetNameSafe(OtherComp), HasAuthority(), bExplodeOnImpact);
+    UE_LOG(LogTemp, Log, TEXT("AS_Projectile::OnHit: %s - Hit %s (Comp: %s). HasAuthority: %d, bExplodeOnImpact: %d"),
+        *GetNameSafe(this), *GetNameSafe(OtherActor), *GetNameSafe(OtherComp), HasAuthority(), bExplodeOnImpact);
     if (!HasAuthority()) return;
 
-    if (OtherActor == InstigatorPawn || OtherActor == OwningWeapon)
-    {
-        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::OnHit: %s - Hit instigator or owning weapon. Ignoring."), *GetNameSafe(this));
-        // return; // This might be too restrictive if projectiles can hit owner after a delay/bounce
-    }
-
-    K2_OnImpact(HitResult);
+    K2_OnImpact(HitResult); // Call BP event for cosmetic effects or special early logic
 
     if (bExplodeOnImpact)
     {
@@ -163,8 +172,22 @@ void AS_Projectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPri
     }
     else
     {
-        UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::OnHit: %s - Not exploding on impact. Destroying."), *GetNameSafe(this));
-        Destroy();
+        // If the projectile is not set to explode on impact,
+        // its behavior is primarily determined by its ProjectileMovementComponent (e.g., bShouldBounce).
+        // If it's not set to bounce by default, and has no other special behavior defined in a derived class
+        // that would return before this, destroy it.
+        if (ProjectileMovementComponent && ProjectileMovementComponent->bShouldBounce)
+        {
+            UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::OnHit: %s - Not exploding, configured to bounce. Letting movement component handle it."), *GetNameSafe(this));
+            // The ProjectileMovementComponent will handle the bounce if bShouldBounce is true.
+            // No explicit Destroy() here if it's meant to bounce.
+        }
+        else
+        {
+            // Not exploding, not configured to bounce by default in this base class.
+            UE_LOG(LogTemp, Verbose, TEXT("AS_Projectile::OnHit: %s - Not exploding, not configured to bounce by default. Destroying."), *GetNameSafe(this));
+            Destroy();
+        }
     }
 }
 
@@ -239,51 +262,51 @@ void AS_Projectile::ApplyRadialDamage()
     }
 
     TArray<AActor*> IgnoredActors;
-    IgnoredActors.Add(this);
+    IgnoredActors.Add(this); // Projectile shouldn't damage itself with its own explosion
     if (InstigatorPawn) IgnoredActors.Add(InstigatorPawn);
     if (OwningWeapon) IgnoredActors.Add(OwningWeapon);
 
     UE_LOG(LogTemp, Log, TEXT("AS_Projectile::ApplyRadialDamage: %s - Applying radial damage. Base: %f, Min: %f, InnerR: %f, OuterR: %f, Location: %s"),
-         *GetNameSafe(this), BaseDamage, MinimumDamage, DamageInnerRadius, DamageOuterRadius, *GetActorLocation().ToString());
+        *GetNameSafe(this), BaseDamage, MinimumDamage, DamageInnerRadius, DamageOuterRadius, *GetActorLocation().ToString());
 
     UGameplayStatics::ApplyRadialDamageWithFalloff(
-        this,
+        this, // DamageCauser Context
         BaseDamage,
         MinimumDamage,
         GetActorLocation(),
         DamageInnerRadius,
         DamageOuterRadius,
-        1.0f,
+        1.0f, // DamageFalloff exponent
         DamageTypeClass,
-        IgnoredActors,
-        this,
-        EventInstigatorController
+        IgnoredActors, // Actors to ignore for this damage application
+        this,          // DamageCauser (the projectile itself)
+        EventInstigatorController // Controller that instigated the damage
     );
 
     // Debug visuals
-    if (GetWorld() && GetWorld()->IsNetMode(NM_ListenServer) || GetWorld()->IsNetMode(NM_Standalone)) // Only draw on server/standalone for clarity
+    if (GetWorld() && (GetWorld()->IsNetMode(NM_ListenServer) || GetWorld()->IsNetMode(NM_Standalone)))
     {
         DrawDebugSphere(
             GetWorld(),
             GetActorLocation(),
-            DamageOuterRadius, // Outer radius
-            32, // Segments
+            DamageOuterRadius,
+            32,
             FColor::Red,
-            false, // Persistent lines
-            5.0f,  // Lifetime
-            0,     // Depth priority
-            1.0f   // Thickness
+            false,
+            5.0f,
+            0,
+            1.0f
         );
         DrawDebugSphere(
             GetWorld(),
             GetActorLocation(),
-            DamageInnerRadius, // Inner radius (full damage)
-            32,  // Segments
+            DamageInnerRadius,
+            32,
             FColor::Yellow,
-            false, // Persistent lines
-            5.0f,   // Lifetime
-            0,      // Depth priority
-            1.0f    // Thickness
+            false,
+            5.0f,
+            0,
+            1.0f
         );
     }
 }
