@@ -1,3 +1,5 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -9,6 +11,8 @@
 
 // Forward Declarations
 class UCameraComponent;
+class USpringArmComponent; // Added
+class USkeletalMeshComponent; // Added
 class US_WeaponInventoryComponent;
 class US_CharacterMovementComponent; // Assuming you'll create this custom version
 class AS_PlayerState; // Forward declare, will be crucial
@@ -44,6 +48,12 @@ public:
 
     /** Returns FirstPersonCameraComponent subobject **/
     FORCEINLINE class UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
+    /** Returns ThirdPersonCameraComponent subobject **/
+    FORCEINLINE class UCameraComponent* GetThirdPersonCameraComponent() const { return ThirdPersonCameraComponent; }
+    /** Returns ThirdPersonSpringArm subobject **/
+    FORCEINLINE class USpringArmComponent* GetThirdPersonSpringArm() const { return ThirdPersonSpringArm; }
+    /** Returns FP_Mesh subobject **/
+    FORCEINLINE class USkeletalMeshComponent* GetFP_Mesh() const { return FP_Mesh; }
     /** Returns WeaponInventoryComponent subobject **/
     FORCEINLINE class US_WeaponInventoryComponent* GetWeaponInventoryComponent() const { return WeaponInventoryComponent; }
 
@@ -66,6 +76,13 @@ public:
     UFUNCTION(BlueprintImplementableEvent, Category = "Character|Health")
     void K2_OnDeath();
 
+    UFUNCTION(BlueprintPure, Category = "Character|View")
+    bool IsFirstPersonView() const { return bIsFirstPersonView; }
+
+    // Manages mesh visibility and weapon attachment based on view perspective
+    UFUNCTION(BlueprintCallable, Category = "Character|View")
+    void RefreshActiveMeshesAndWeaponAttachment();
+
 protected:
     //~ Begin AActor Interface
     virtual void BeginPlay() override;
@@ -74,6 +91,16 @@ protected:
     // COMPONENTS
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
     TObjectPtr<UCameraComponent> FirstPersonCameraComponent;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<USkeletalMeshComponent> FP_Mesh;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<USpringArmComponent> ThirdPersonSpringArm;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<UCameraComponent> ThirdPersonCameraComponent;
+    // End Components
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components", meta = (AllowPrivateAccess = "true"))
     TObjectPtr<US_WeaponInventoryComponent> WeaponInventoryComponent;
@@ -106,6 +133,9 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
     UInputAction* PreviousWeaponAction;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
+    UInputAction* ToggleCameraViewAction; // Added
+
     // Input handler functions
     virtual void Input_Move(const FInputActionValue& InputActionValue);
     virtual void Input_Look(const FInputActionValue& InputActionValue);
@@ -119,6 +149,7 @@ protected:
 
     virtual void Input_NextWeapon(const FInputActionValue& InputActionValue);
     virtual void Input_PreviousWeapon(const FInputActionValue& InputActionValue);
+    virtual void Input_ToggleCameraView(const FInputActionValue& InputActionValue); // Added
 
     // For weapon abilities - these store the InputID for the CURRENTLY EQUIPPED weapon's abilities
     TArray<FGameplayAbilitySpecHandle> CurrentWeaponAbilityHandles; // Server tracks granted handles
@@ -133,6 +164,17 @@ protected:
     // Health/Death
     virtual void HandleDeath(); // Called by PlayerState when health reaches zero
     friend class AS_PlayerState; // Allow PlayerState to call HandleDeath
+
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Character|View") // Changed to VisibleInstanceOnly as it's primarily for local logic
+        bool bIsFirstPersonView;
+
+    // Sockets for weapon attachment
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|WeaponAttachment")
+    FName FirstPersonWeaponSocketName;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|WeaponAttachment")
+    FName ThirdPersonWeaponSocketName;
+
 
 private:
     // Helper to bind to PlayerState's attribute changes.
