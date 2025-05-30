@@ -259,6 +259,33 @@ void AS_Projectile::ApplyRadialDamage()
         this,
         EventInstigatorController
     );
+
+    // Debug visuals
+    if (GetWorld() && GetWorld()->IsNetMode(NM_ListenServer) || GetWorld()->IsNetMode(NM_Standalone)) // Only draw on server/standalone for clarity
+    {
+        DrawDebugSphere(
+            GetWorld(),
+            GetActorLocation(),
+            DamageOuterRadius, // Outer radius
+            32, // Segments
+            FColor::Red,
+            false, // Persistent lines
+            5.0f,  // Lifetime
+            0,     // Depth priority
+            1.0f   // Thickness
+        );
+        DrawDebugSphere(
+            GetWorld(),
+            GetActorLocation(),
+            DamageInnerRadius, // Inner radius (full damage)
+            32,  // Segments
+            FColor::Yellow,
+            false, // Persistent lines
+            5.0f,   // Lifetime
+            0,      // Depth priority
+            1.0f    // Thickness
+        );
+    }
 }
 
 bool AS_Projectile::Server_RequestDetonation_Validate() { return true; }
