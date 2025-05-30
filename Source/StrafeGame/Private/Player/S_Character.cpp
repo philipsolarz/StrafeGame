@@ -25,6 +25,7 @@
 #include "GameplayAbilitySpec.h"
 #include "GameplayTagContainer.h"
 
+
 AS_Character::AS_Character(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer.SetDefaultSubobjectClass<US_CharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
@@ -145,12 +146,13 @@ void AS_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         }
         if (PrimaryAbilityAction)
         {
-            EnhancedInputComponent->BindAction(PrimaryAbilityAction, ETriggerEvent::Started, this, &AS_Character::Input_PrimaryAbility_Pressed);
+            // MODIFIED HERE: Changed ETriggerEvent::Started to ETriggerEvent::Triggered
+            EnhancedInputComponent->BindAction(PrimaryAbilityAction, ETriggerEvent::Triggered, this, &AS_Character::Input_PrimaryAbility_Pressed);
             EnhancedInputComponent->BindAction(PrimaryAbilityAction, ETriggerEvent::Completed, this, &AS_Character::Input_PrimaryAbility_Released);
         }
         if (SecondaryAbilityAction)
         {
-            EnhancedInputComponent->BindAction(SecondaryAbilityAction, ETriggerEvent::Started, this, &AS_Character::Input_SecondaryAbility_Pressed);
+            EnhancedInputComponent->BindAction(SecondaryAbilityAction, ETriggerEvent::Triggered, this, &AS_Character::Input_SecondaryAbility_Pressed);
             EnhancedInputComponent->BindAction(SecondaryAbilityAction, ETriggerEvent::Completed, this, &AS_Character::Input_SecondaryAbility_Released);
         }
         if (NextWeaponAction) EnhancedInputComponent->BindAction(NextWeaponAction, ETriggerEvent::Started, this, &AS_Character::Input_NextWeapon);
