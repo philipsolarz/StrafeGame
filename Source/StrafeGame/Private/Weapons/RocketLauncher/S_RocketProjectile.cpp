@@ -12,7 +12,7 @@ AS_RocketProjectile::AS_RocketProjectile()
         ProjectileMovementComponent->MaxSpeed = 2500.f;
         ProjectileMovementComponent->bRotationFollowsVelocity = true;
         ProjectileMovementComponent->bShouldBounce = false;
-        ProjectileMovementComponent->ProjectileGravityScale = 0.1f; // Slight gravity for an arc, or 0 for straight
+        ProjectileMovementComponent->ProjectileGravityScale = 0.f; // Slight gravity for an arc, or 0 for straight
         ProjectileMovementComponent->HomingAccelerationMagnitude = 0.f; // No homing by default
     }
 

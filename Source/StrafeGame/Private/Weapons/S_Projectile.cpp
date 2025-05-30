@@ -21,7 +21,7 @@ AS_Projectile::AS_Projectile()
     CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
     RootComponent = CollisionComponent;
     CollisionComponent->InitSphereRadius(10.0f);
-    CollisionComponent->SetCollisionProfileName(TEXT("Projectile")); // Ensure this profile is set up correctly in project settings
+    //CollisionComponent->SetCollisionProfileName(TEXT("Projectile")); // Ensure this profile is set up correctly in project settings
     CollisionComponent->bReturnMaterialOnMove = true;
 
     ProjectileMovementComponent = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovementComponent"));
