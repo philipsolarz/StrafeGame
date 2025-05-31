@@ -12,6 +12,8 @@
 #include "GameFramework/Controller.h"
 #include "GameplayEffectTypes.h"
 #include "Abilities/GameplayAbility.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 US_ChargedShotgunPrimaryAbility::US_ChargedShotgunPrimaryAbility()
 {
@@ -23,6 +25,8 @@ US_ChargedShotgunPrimaryAbility::US_ChargedShotgunPrimaryAbility()
 
     bIsCharging = false;
     bFiredDuringChargeLoop = false;
+    ChargeStartTime = 0.0f;
+    ChargeDuration = 0.0f;
 }
 
 AS_ChargedShotgun* US_ChargedShotgunPrimaryAbility::GetChargedShotgun() const
@@ -108,6 +112,13 @@ void US_ChargedShotgunPrimaryAbility::StartCharge()
         return;
     }
 
+    // Store charge timing info
+    ChargeStartTime = GetWorld()->GetTimeSeconds();
+    ChargeDuration = ShotgunData->PrimaryChargeTime;
+
+    // Reset charge progress
+    Shotgun->SetPrimaryChargeProgress(0.0f);
+
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
     if (ChargeInProgressTag.IsValid() && ASC)
     {
@@ -120,6 +131,12 @@ void US_ChargedShotgunPrimaryAbility::StartCharge()
         UE_LOG(LogTemp, Log, TEXT("US_ChargedShotgunPrimaryAbility::StartCharge: Executed PrimaryChargeStartCue %s"), *ShotgunData->PrimaryChargeStartCue.ToString());
     }
     Shotgun->K2_OnPrimaryChargeStart();
+
+    // Start progress update timer
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimer(ChargeProgressTimerHandle, this, &US_ChargedShotgunPrimaryAbility::UpdateChargeProgress, 0.05f, true);
+    }
 
     ChargeTimerTask = UAbilityTask_WaitDelay::WaitDelay(this, ShotgunData->PrimaryChargeTime);
     if (ChargeTimerTask)
@@ -135,12 +152,38 @@ void US_ChargedShotgunPrimaryAbility::StartCharge()
     }
 }
 
+void US_ChargedShotgunPrimaryAbility::UpdateChargeProgress()
+{
+    if (!bIsCharging) return;
+
+    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
+    if (!Shotgun) return;
+
+    float CurrentTime = GetWorld()->GetTimeSeconds();
+    float ElapsedTime = CurrentTime - ChargeStartTime;
+    float Progress = FMath::Clamp(ElapsedTime / ChargeDuration, 0.0f, 1.0f);
+
+    Shotgun->SetPrimaryChargeProgress(Progress);
+}
+
 void US_ChargedShotgunPrimaryAbility::OnChargeComplete()
 {
     UE_LOG(LogTemp, Log, TEXT("US_ChargedShotgunPrimaryAbility::OnChargeComplete. bIsCharging: %d"), bIsCharging);
     if (!bIsCharging)
     {
         return;
+    }
+
+    // Stop progress updates
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(ChargeProgressTimerHandle);
+    }
+
+    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
+    if (Shotgun)
+    {
+        Shotgun->SetPrimaryChargeProgress(1.0f); // Ensure it's at 100%
     }
 
     bIsCharging = false;
@@ -151,7 +194,6 @@ void US_ChargedShotgunPrimaryAbility::OnChargeComplete()
         UE_LOG(LogTemp, Log, TEXT("US_ChargedShotgunPrimaryAbility::OnChargeComplete: Removed ChargeInProgressTag %s"), *ChargeInProgressTag.ToString());
     }
 
-    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
     if (Shotgun) Shotgun->K2_OnPrimaryChargeComplete();
 
     if (CommitAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo()))
@@ -309,6 +351,21 @@ void US_ChargedShotgunPrimaryAbility::ResetAbilityState()
 {
     bIsCharging = false;
     bFiredDuringChargeLoop = false;
+    ChargeStartTime = 0.0f;
+    ChargeDuration = 0.0f;
+
+    // Stop progress timer
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(ChargeProgressTimerHandle);
+    }
+
+    // Reset weapon charge progress
+    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
+    if (Shotgun)
+    {
+        Shotgun->SetPrimaryChargeProgress(0.0f);
+    }
 
     if (ChargeTimerTask && ChargeTimerTask->IsActive())
     {

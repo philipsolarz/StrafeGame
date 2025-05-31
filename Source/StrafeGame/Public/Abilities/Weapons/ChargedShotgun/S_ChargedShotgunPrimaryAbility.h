@@ -32,10 +32,15 @@ protected:
 
     bool bIsCharging;
     bool bFiredDuringChargeLoop; // To prevent immediate re-fire if input held after auto-fire
+    float ChargeStartTime; // Track when charging started
+    float ChargeDuration; // Store the charge duration
 
     // GameplayTags used by this ability
     FGameplayTag ChargeInProgressTag;
     FGameplayTag EarlyReleaseCooldownTag; // Tag applied by the early release cooldown GE
+
+    // Timer handle for progress updates
+    FTimerHandle ChargeProgressTimerHandle;
 
     /** Starts or restarts the charging process. */
     void StartCharge();
@@ -43,6 +48,9 @@ protected:
     /** Called when the charge timer completes. */
     UFUNCTION()
     void OnChargeComplete();
+
+    /** Updates charge progress. Called by timer. */
+    void UpdateChargeProgress();
 
     /** Handles the actual firing logic. */
     void DoFire();
