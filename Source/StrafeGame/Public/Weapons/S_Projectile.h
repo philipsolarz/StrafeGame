@@ -3,10 +3,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagContainer.h" // For FGameplayTag
+#include "Components/SphereComponent.h"
 #include "S_Projectile.generated.h"
 
 // Forward Declarations
-class USphereComponent;
+//class USphereComponent;
 class UProjectileMovementComponent;
 class UStaticMeshComponent;
 class AS_ProjectileWeapon; // The weapon that fired this projectile
