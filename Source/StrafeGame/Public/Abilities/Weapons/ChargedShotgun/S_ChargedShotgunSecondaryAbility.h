@@ -33,17 +33,23 @@ protected:
     bool bIsCharging;
     bool bOverchargedShotStored;
     bool bInputReleasedDuringChargeAttempt; // Flag to check if input was let go while trying to charge
+    float ChargeStartTime; // Track when charging started
+    float ChargeDuration; // Store the charge duration
 
     // GameplayTags
     FGameplayTag ChargeInProgressTag;
     FGameplayTag OverchargedStateTag;
     // Lockout tag comes from DataAsset
 
+    // Timer handle for progress updates
+    FTimerHandle ChargeProgressTimerHandle;
+
     void StartSecondaryCharge();
 
     UFUNCTION()
     void OnSecondaryChargeComplete();
 
+    void UpdateChargeProgress();
     void AttemptFireOverchargedShot();
     void ApplyWeaponLockoutCooldown();
     void ResetAbilityState();

@@ -10,6 +10,8 @@
 #include "GameFramework/Controller.h"
 #include "GameplayEffectTypes.h"
 #include "Abilities/GameplayAbility.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 
 US_ChargedShotgunSecondaryAbility::US_ChargedShotgunSecondaryAbility()
 {
@@ -22,6 +24,8 @@ US_ChargedShotgunSecondaryAbility::US_ChargedShotgunSecondaryAbility()
     bIsCharging = false;
     bOverchargedShotStored = false;
     bInputReleasedDuringChargeAttempt = false;
+    ChargeStartTime = 0.0f;
+    ChargeDuration = 0.0f;
 }
 
 AS_ChargedShotgun* US_ChargedShotgunSecondaryAbility::GetChargedShotgun() const
@@ -100,6 +104,13 @@ void US_ChargedShotgunSecondaryAbility::StartSecondaryCharge()
         return;
     }
 
+    // Store charge timing info
+    ChargeStartTime = GetWorld()->GetTimeSeconds();
+    ChargeDuration = ShotgunData->SecondaryChargeTime;
+
+    // Reset charge progress
+    Shotgun->SetSecondaryChargeProgress(0.0f);
+
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
     if (ChargeInProgressTag.IsValid() && ASC)
     {
@@ -112,6 +123,12 @@ void US_ChargedShotgunSecondaryAbility::StartSecondaryCharge()
         UE_LOG(LogTemp, Log, TEXT("US_ChargedShotgunSecondaryAbility::StartSecondaryCharge: Executed SecondaryChargeStartCue %s"), *ShotgunData->SecondaryChargeStartCue.ToString());
     }
     Shotgun->K2_OnSecondaryChargeStart();
+
+    // Start progress update timer
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimer(ChargeProgressTimerHandle, this, &US_ChargedShotgunSecondaryAbility::UpdateChargeProgress, 0.05f, true);
+    }
 
     ChargeTimerTask = UAbilityTask_WaitDelay::WaitDelay(this, ShotgunData->SecondaryChargeTime);
     if (ChargeTimerTask)
@@ -127,10 +144,36 @@ void US_ChargedShotgunSecondaryAbility::StartSecondaryCharge()
     }
 }
 
+void US_ChargedShotgunSecondaryAbility::UpdateChargeProgress()
+{
+    if (!bIsCharging) return;
+
+    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
+    if (!Shotgun) return;
+
+    float CurrentTime = GetWorld()->GetTimeSeconds();
+    float ElapsedTime = CurrentTime - ChargeStartTime;
+    float Progress = FMath::Clamp(ElapsedTime / ChargeDuration, 0.0f, 1.0f);
+
+    Shotgun->SetSecondaryChargeProgress(Progress);
+}
+
 void US_ChargedShotgunSecondaryAbility::OnSecondaryChargeComplete()
 {
     UE_LOG(LogTemp, Log, TEXT("US_ChargedShotgunSecondaryAbility::OnSecondaryChargeComplete. bIsCharging: %d, bInputReleasedDuringChargeAttempt: %d"), bIsCharging, bInputReleasedDuringChargeAttempt);
     if (!bIsCharging) return;
+
+    // Stop progress updates
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(ChargeProgressTimerHandle);
+    }
+
+    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
+    if (Shotgun)
+    {
+        Shotgun->SetSecondaryChargeProgress(1.0f); // Ensure it's at 100%
+    }
 
     bIsCharging = false;
     UAbilitySystemComponent* ASC = GetAbilitySystemComponentFromActorInfo();
@@ -140,7 +183,6 @@ void US_ChargedShotgunSecondaryAbility::OnSecondaryChargeComplete()
         UE_LOG(LogTemp, Log, TEXT("US_ChargedShotgunSecondaryAbility::OnSecondaryChargeComplete: Removed ChargeInProgressTag %s"), *ChargeInProgressTag.ToString());
     }
 
-    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
     const US_ChargedShotgunDataAsset* ShotgunData = GetChargedShotgunData();
 
     if (bInputReleasedDuringChargeAttempt) // Input was released *during* the charge timer
@@ -309,6 +351,21 @@ void US_ChargedShotgunSecondaryAbility::ResetAbilityState()
     bIsCharging = false;
     bOverchargedShotStored = false;
     bInputReleasedDuringChargeAttempt = false;
+    ChargeStartTime = 0.0f;
+    ChargeDuration = 0.0f;
+
+    // Stop progress timer
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(ChargeProgressTimerHandle);
+    }
+
+    // Reset weapon charge progress
+    AS_ChargedShotgun* Shotgun = GetChargedShotgun();
+    if (Shotgun)
+    {
+        Shotgun->SetSecondaryChargeProgress(0.0f);
+    }
 
     if (ChargeTimerTask && ChargeTimerTask->IsActive())
     {
