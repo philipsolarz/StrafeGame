@@ -10,6 +10,12 @@ AS_PlayerController::AS_PlayerController()
     PlayerHUDManagerInstance = nullptr;
 }
 
+AS_PlayerHUDManager* AS_PlayerController::GetPlayerHUDManagerInstance() const
+{
+    return PlayerHUDManagerInstance.Get(); // .Get() is used for TObjectPtr to get the raw pointer
+}
+
+
 void AS_PlayerController::BeginPlay()
 {
     Super::BeginPlay();
@@ -42,13 +48,11 @@ void AS_PlayerController::OnUnPossess()
 
 void AS_PlayerController::CreatePlayerHUDManager()
 {
-    // Ensure this runs only on the client that owns this controller.
     if (!IsLocalController())
     {
         return;
     }
 
-    // Destroy previous HUD manager instance if it somehow exists (e.g., during seamless travel if not handled properly)
     if (PlayerHUDManagerInstance)
     {
         UE_LOG(LogTemp, Log, TEXT("AS_PlayerController %s: Destroying existing PlayerHUDManagerInstance."), *GetNameSafe(this));
@@ -59,17 +63,17 @@ void AS_PlayerController::CreatePlayerHUDManager()
     if (PlayerHUDManagerClass)
     {
         FActorSpawnParameters SpawnParams;
-        SpawnParams.Owner = this; // The PlayerController owns the HUD Manager
-        SpawnParams.Instigator = GetInstigator(); // Usually the Pawn controlled by this PC
+        SpawnParams.Owner = this;
+        SpawnParams.Instigator = GetInstigator();
         SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
         PlayerHUDManagerInstance = GetWorld()->SpawnActor<AS_PlayerHUDManager>(PlayerHUDManagerClass, SpawnParams);
 
         if (PlayerHUDManagerInstance)
         {
-            PlayerHUDManagerInstance->Initialize(this); // Pass this PlayerController to the manager
+            PlayerHUDManagerInstance->Initialize(this);
             UE_LOG(LogTemp, Log, TEXT("AS_PlayerController %s: Spawned and Initialized PlayerHUDManagerInstance: %s of class %s"),
-                *GetNameSafe(this), *GetNameSafe(PlayerHUDManagerInstance), *GetNameSafe(PlayerHUDManagerClass));
+                *GetNameSafe(this), *GetNameSafe(PlayerHUDManagerInstance.Get()), *GetNameSafe(PlayerHUDManagerClass)); // Use .Get() for logging TObjectPtr
         }
         else
         {

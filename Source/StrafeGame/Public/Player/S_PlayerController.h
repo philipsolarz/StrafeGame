@@ -15,6 +15,9 @@ class STRAFEGAME_API AS_PlayerController : public APlayerController
 public:
     AS_PlayerController();
 
+    UFUNCTION(BlueprintPure, Category = "HUD") // BlueprintPure so it can be called in BP too if needed
+        AS_PlayerHUDManager* GetPlayerHUDManagerInstance() const;
+
 protected:
     /** Called when the game starts or when the player controller is spawned/initialized.
      * For client controllers, this (or ReceivedPlayer) is a good place to set up client-specific things like the HUD.
@@ -41,4 +44,6 @@ protected:
      * This will in turn create the actual UMG HUD.
      */
     virtual void CreatePlayerHUDManager();
+
+
 };
