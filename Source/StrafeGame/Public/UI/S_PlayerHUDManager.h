@@ -1,4 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -6,7 +5,16 @@
 #include "S_PlayerHUDManager.generated.h"
 
 class UUserWidget;
-class AS_PlayerController; // Forward declaration
+class AS_PlayerController;
+class US_PlayerHUDViewModel; // Added
+class US_GameModeHUDViewModelBase; // Added
+class US_AnnouncerViewModel; // Added
+class US_ScreenEffectsViewModel; // Added
+
+// Forward declare specific game mode VM types
+class US_ArenaHUDViewModel;
+class US_StrafeHUDViewModel;
+
 
 UCLASS()
 class STRAFEGAME_API AS_PlayerHUDManager : public AActor
@@ -19,35 +27,63 @@ public:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-    /**
-     * Initializes the HUD manager with the owning player controller.
-     * This is where the main HUD widget would be created and added to the viewport.
-     * Called by AS_PlayerController after this manager is spawned.
-     */
     virtual void Initialize(AS_PlayerController* OwningPlayerController);
 
     UFUNCTION(BlueprintPure, Category = "HUDManager")
     AS_PlayerController* GetOwningStrafePlayerController() const;
 
-protected:
-    UPROPERTY(Transient) // Owning PC doesn't need to be replicated or saved
-        TObjectPtr<AS_PlayerController> OwningStrafePC;
+    // Expose ViewModels to Blueprints (e.g., for the root WBP_MainHUD to access)
+    UFUNCTION(BlueprintPure, Category = "HUDManager|ViewModels")
+    US_PlayerHUDViewModel* GetPlayerHUDViewModel() const { return PlayerHUDViewModel; }
 
-    /** The root UMG widget for the main HUD. Will be created in Initialize. */
-    UPROPERTY(BlueprintReadOnly, Category = "HUDManager|Widgets")
+    UFUNCTION(BlueprintPure, Category = "HUDManager|ViewModels")
+    US_GameModeHUDViewModelBase* GetGameModeHUDViewModel() const { return GameModeHUDViewModel; }
+
+    UFUNCTION(BlueprintPure, Category = "HUDManager|ViewModels")
+    US_AnnouncerViewModel* GetAnnouncerViewModel() const { return AnnouncerViewModel; }
+
+    UFUNCTION(BlueprintPure, Category = "HUDManager|ViewModels")
+    US_ScreenEffectsViewModel* GetScreenEffectsViewModel() const { return ScreenEffectsViewModel; }
+
+    // Function to trigger announcements from game systems
+    UFUNCTION(BlueprintCallable, Category = "HUDManager|Announcer")
+    void ShowGameAnnouncement(const FText& Message, float Duration = 3.0f);
+
+protected:
+    UPROPERTY(Transient)
+    TObjectPtr<AS_PlayerController> OwningStrafePC;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HUDManager|Widgets", meta = (AllowPrivateAccess = "true"))
     TObjectPtr<UUserWidget> MainHUDWidget;
 
-    /**
-     * Class of the main HUD UMG widget to create.
-     * This should be assigned in a Blueprint subclass of AS_PlayerHUDManager,
-     * which is then set in the AS_PlayerController's defaults.
-     */
     UPROPERTY(EditDefaultsOnly, Category = "HUDManager|Widgets", Meta = (DisplayName = "Main HUD Widget Class"))
     TSubclassOf<UUserWidget> MainHUDWidgetClass;
 
-public:
-    // Example function to be implemented in Blueprints for showing announcer messages.
-    // This demonstrates how game systems can interact with the HUD via this manager.
-    UFUNCTION(BlueprintImplementableEvent, Category = "HUDManager|Announcer")
-    void ShowAnnouncerMessage(const FText& Message, float Duration);
+    // ViewModels - owned by the HUD Manager
+    UPROPERTY(BlueprintReadOnly, Category = "HUDManager|ViewModels", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<US_PlayerHUDViewModel> PlayerHUDViewModel;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HUDManager|ViewModels", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<US_GameModeHUDViewModelBase> GameModeHUDViewModel; // Will hold Arena or Strafe VM
+
+    UPROPERTY(BlueprintReadOnly, Category = "HUDManager|ViewModels", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<US_AnnouncerViewModel> AnnouncerViewModel;
+
+    UPROPERTY(BlueprintReadOnly, Category = "HUDManager|ViewModels", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<US_ScreenEffectsViewModel> ScreenEffectsViewModel;
+
+    // Specific GameMode ViewModel classes (to be set in BP if this manager is subclassed, or detected at runtime)
+    UPROPERTY(EditDefaultsOnly, Category = "HUDManager|ViewModels")
+    TSubclassOf<US_ArenaHUDViewModel> ArenaHUDViewModelClass;
+
+    UPROPERTY(EditDefaultsOnly, Category = "HUDManager|ViewModels")
+    TSubclassOf<US_StrafeHUDViewModel> StrafeHUDViewModelClass;
+
+    void CreateViewModels();
+    void InitializeViewModels();
+    void DeinitializeViewModels();
+
+    // Called when the game state's MatchState changes, to swap GameModeHUDViewModel if necessary
+    UFUNCTION() // Make it UFUNCTION if binding to a delegate
+        void OnMatchStateChanged(); // Placeholder - needs actual delegate from GameState/GameMode
 };

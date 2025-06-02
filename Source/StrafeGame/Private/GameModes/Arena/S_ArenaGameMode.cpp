@@ -7,6 +7,9 @@
 #include "TimerManager.h"
 #include "Engine/World.h"
 #include "UObject/ConstructorHelpers.h" 
+// Make sure AS_PlayerState is included if GetPlayerName() is used on base
+#include "GameFramework/PlayerState.h"
+
 
 AS_ArenaGameMode::AS_ArenaGameMode()
 {
@@ -26,7 +29,7 @@ void AS_ArenaGameMode::InitGameState()
     if (ArenaGS)
     {
         ArenaGS->FragLimit = FragLimit;
-        ArenaGS->MatchDurationSeconds = MatchTimeLimitSeconds; // Also replicate MatchTimeLimit
+        ArenaGS->MatchDurationSeconds = MatchTimeLimitSeconds;
     }
 }
 
@@ -35,8 +38,7 @@ void AS_ArenaGameMode::PostLogin(APlayerController* NewPlayer)
     Super::PostLogin(NewPlayer);
     UE_LOG(LogTemp, Log, TEXT("AS_ArenaGameMode: Player %s logged in."), *NewPlayer->GetName());
 
-    // if (IsMatchInProgress() || GetMatchState() == MatchState::WaitingToStart || GetMatchState() == MatchState::Warmup) // Old
-    if (IsMatchInProgress() || GetMatchState() == MatchState::WaitingToStart || GetMatchState() == FName(TEXT("Warmup"))) // Corrected
+    if (IsMatchInProgress() || GetMatchState() == MatchState::WaitingToStart || GetMatchState() == FName(TEXT("Warmup")))
     {
         RestartPlayer(NewPlayer);
     }
@@ -59,10 +61,12 @@ void AS_ArenaGameMode::PreLogin(const FString& Options, const FString& Address, 
 
 bool AS_ArenaGameMode::PlayerCanRestart(APlayerController* Player)
 {
-    // if (GetMatchState() == MatchState::InProgress || GetMatchState() == MatchState::Warmup) // Old
-    if (GetMatchState() == MatchState::InProgress || GetMatchState() == FName(TEXT("Warmup"))) // Corrected
+    if (GetMatchState() == MatchState::InProgress || GetMatchState() == FName(TEXT("Warmup")))
     {
-        return Super::PlayerCanRestart(Player);
+        // Note: Super::PlayerCanRestart(Player) in AGameModeBase returns false by default.
+        // You likely want to override it in S_GameModeBase to return true for these states,
+        // or just handle the logic directly here. For now, assume true if in these states.
+        return true;
     }
     return false;
 }
@@ -80,13 +84,13 @@ void AS_ArenaGameMode::HandleMatchIsWaitingToStart()
 
     if (WarmupTime > 0.f)
     {
-        SetMatchState(FName(TEXT("Warmup"))); // Corrected: Set actual MatchState FName
+        SetMatchState(FName(TEXT("Warmup")));
         StartWarmupTimer();
         AS_ArenaGameState* ArenaGS = GetArenaGameState();
         if (ArenaGS)
         {
             ArenaGS->SetRemainingTime(FMath::CeilToInt(WarmupTime));
-            // ArenaGS->SetMatchStateNameOverride(FName(TEXT("Warmup"))); // This can still be used if MatchState FName itself isn't enough for UI
+            ArenaGS->SetMatchStateNameOverride(FName(TEXT("Warmup")));
         }
     }
     else
@@ -126,7 +130,7 @@ void AS_ArenaGameMode::HandleMatchHasStarted()
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
         APlayerController* PC = It->Get();
-        if (PC && PC->GetPawn() == nullptr)
+        if (PC && PC->GetPawn() == nullptr && PlayerCanRestart(PC)) // Check if player can restart
         {
             RestartPlayer(PC);
         }
@@ -152,14 +156,14 @@ void AS_ArenaGameMode::UpdateMainMatchTime()
         CurrentTime--;
         ArenaGS->SetRemainingTime(CurrentTime);
 
-        if (CurrentTime <= 0)
+        if (CurrentTime <= 0 && MatchTimeLimitSeconds > 0) // Ensure time limit was set
         {
             UE_LOG(LogTemp, Log, TEXT("AS_ArenaGameMode: Match time limit reached."));
             GetWorldTimerManager().ClearTimer(MatchTimerHandle);
             EndMatch();
         }
     }
-    else if (IsMatchInProgress())
+    else if (IsMatchInProgress()) // Should not happen if ArenaGS is null, but safety
     {
         GetWorldTimerManager().ClearTimer(MatchTimerHandle);
     }
@@ -173,16 +177,19 @@ void AS_ArenaGameMode::HandleMatchHasEnded()
     GetWorldTimerManager().ClearTimer(MatchTimerHandle);
 
     AS_ArenaPlayerState* Winner = GetMatchWinner();
-    FName Reason = (FragLimit > 0 && Winner && Winner->GetFrags() >= FragLimit) ? FName(TEXT("FragLimitReached")) : FName(TEXT("TimeLimitReached"));
+    FName Reason = FName(TEXT("TimeLimitReached")); // Default reason
+    if (FragLimit > 0 && Winner && Winner->GetFrags() >= FragLimit)
+    {
+        Reason = FName(TEXT("FragLimitReached"));
+    }
 
     OnArenaMatchEndedDelegate_Native.Broadcast(Winner, Reason);
 
-    AS_ArenaGameState* ArenaGS = GetArenaGameState(); // Get it again for safety
+    AS_ArenaGameState* ArenaGS = GetArenaGameState();
     if (ArenaGS)
     {
-        ArenaGS->SetMatchStateNameOverride(FName(TEXT("PostMatch"))); // Set custom state for UI
+        ArenaGS->SetMatchStateNameOverride(FName(TEXT("PostMatch")));
     }
-
 
     if (PostMatchTime > 0.f)
     {
@@ -205,7 +212,7 @@ void AS_ArenaGameMode::OnPostMatchTimerEnd()
 {
     GetWorldTimerManager().ClearTimer(PostMatchTimerHandle);
     UE_LOG(LogTemp, Log, TEXT("AS_ArenaGameMode: Post-match ended. Restarting game or returning to lobby."));
-    RestartGame();
+    RestartGame(); // Or specific logic like TravelToMap
 }
 
 
@@ -228,6 +235,54 @@ void AS_ArenaGameMode::OnPlayerKilled(AS_PlayerState* VictimBasePS, AS_PlayerSta
             KillerPlayerState->ScoreFrag(KillerPlayerState, VictimPlayerState);
         }
     }
+
+    AS_ArenaGameState* ArenaGS = GetArenaGameState();
+    if (ArenaGS)
+    {
+        FKillfeedEventData KillData; // Uses FKillfeedEventData from S_KillfeedItemViewModel.h
+        KillData.VictimName = VictimPlayerState ? VictimPlayerState->GetPlayerName() : TEXT("Unknown");
+
+        APlayerController* LocalPlayerController = nullptr;
+        if (GetWorld()) LocalPlayerController = GetWorld()->GetFirstPlayerController();
+
+        if (KillerPlayerState)
+        {
+            KillData.KillerName = KillerPlayerState->GetPlayerName();
+            KillData.bWasSuicide = (KillerPlayerState == VictimPlayerState); // This line should now be fine
+            if (LocalPlayerController && KillerPlayerState == LocalPlayerController->PlayerState)
+            {
+                KillData.bIsLocalPlayerKiller = true;
+            }
+        }
+        else
+        {
+            KillData.KillerName = TEXT("Environment");
+            KillData.bWasSuicide = true; // This line should now be fine
+        }
+
+        if (LocalPlayerController && VictimPlayerState == LocalPlayerController->PlayerState)
+        {
+            KillData.bIsLocalPlayerVictim = true;
+        }
+
+        // Example Weapon Icon Logic (ensure AS_Weapon, AS_Projectile, US_WeaponDataAsset are included if using)
+        // AS_Weapon* KillingWeapon = nullptr;
+        // if (AS_Projectile* Proj = Cast<AS_Projectile>(KillingDamageCauser))
+        // {
+        //     KillingWeapon = Proj->GetOwningWeapon();
+        // }
+        // else if (AS_Weapon* Weap = Cast<AS_Weapon>(KillingDamageCauser))
+        // {
+        //     KillingWeapon = Weap;
+        // }
+        // if (KillingWeapon && KillingWeapon->GetWeaponData())
+        // {
+        //     KillData.WeaponIcon = KillingWeapon->GetWeaponData()->WeaponIcon;
+        // }
+
+        ArenaGS->AddKillToLog(KillData);
+    }
+
     CheckMatchEndConditions();
 }
 
@@ -252,13 +307,14 @@ void AS_ArenaGameMode::CheckMatchEndConditions()
             }
         }
     }
+    // Time limit is checked by UpdateMainMatchTime
 }
 
 AS_ArenaPlayerState* AS_ArenaGameMode::GetMatchWinner() const
 {
     AS_ArenaPlayerState* Winner = nullptr;
     int32 MaxFrags = -1;
-    bool bIsDraw = false;
+    // bool bIsDraw = false; // Not strictly needed if we just return nullptr for draw
 
     if (GameState)
     {
@@ -271,17 +327,17 @@ AS_ArenaPlayerState* AS_ArenaGameMode::GetMatchWinner() const
                 {
                     MaxFrags = ArenaPS->GetFrags();
                     Winner = ArenaPS;
-                    bIsDraw = false;
+                    // bIsDraw = false;
                 }
-                else if (ArenaPS->GetFrags() == MaxFrags && MaxFrags != -1)
+                else if (ArenaPS->GetFrags() == MaxFrags && MaxFrags != -1) // Check if it's a tie with the current max
                 {
-                    Winner = nullptr; // Nullify winner in case of a draw
-                    bIsDraw = true;
+                    Winner = nullptr; // It's a draw, no single winner
+                    // bIsDraw = true;
                 }
             }
         }
     }
-    return Winner; // If bIsDraw was true, Winner will be nullptr
+    return Winner;
 }
 
 AS_ArenaGameState* AS_ArenaGameMode::GetArenaGameState() const

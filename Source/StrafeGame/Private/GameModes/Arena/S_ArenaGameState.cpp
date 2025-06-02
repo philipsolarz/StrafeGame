@@ -1,22 +1,22 @@
 #include "GameModes/Arena/S_ArenaGameState.h"
 #include "Net/UnrealNetwork.h"
-#include "GameModes/Arena/S_ArenaPlayerState.h" // For CurrentLeaderPlayerState example
+#include "GameModes/Arena/S_ArenaPlayerState.h" 
+#include "UI/ViewModels/S_KillfeedItemViewModel.h" // Ensures FKillfeedEventData is known
 
 AS_ArenaGameState::AS_ArenaGameState()
 {
-    FragLimit = 0; // Default, will be set by GameMode
+    FragLimit = 0;
     MatchStateNameOverride = NAME_None;
     MatchDurationSeconds = 0;
-    // CurrentLeaderPlayerState = nullptr;
 }
 
 void AS_ArenaGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
-    Super::GetLifetimeReplicatedProps(OutLifetimeProps); // Replicates RemainingTime from base
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AS_ArenaGameState, FragLimit);
     DOREPLIFETIME(AS_ArenaGameState, MatchStateNameOverride);
     DOREPLIFETIME(AS_ArenaGameState, MatchDurationSeconds);
-    // DOREPLIFETIME(AS_ArenaGameState, CurrentLeaderPlayerState);
+    DOREPLIFETIME(AS_ArenaGameState, RecentKillsLog);
 }
 
 void AS_ArenaGameState::SetMatchStateNameOverride(FName NewName)
@@ -24,7 +24,7 @@ void AS_ArenaGameState::SetMatchStateNameOverride(FName NewName)
     if (HasAuthority())
     {
         MatchStateNameOverride = NewName;
-        OnRep_MatchStateNameOverride(); // Call on server too for local listeners
+        OnRep_MatchStateNameOverride();
     }
 }
 
@@ -33,43 +33,25 @@ void AS_ArenaGameState::OnRep_MatchStateNameOverride()
     OnMatchStateNameOverrideChangedDelegate.Broadcast(MatchStateNameOverride);
 }
 
-
-// Example for leader tracking
-/*
-void AS_ArenaGameState::OnRep_CurrentLeader()
+void AS_ArenaGameState::OnRep_RecentKills()
 {
-    // Broadcast delegate or update UI elements that show the current leader
+    OnKillfeedUpdated.Broadcast();
 }
 
-void AS_ArenaGameState::UpdateLeader()
+// Corrected function signature to match the header
+void AS_ArenaGameState::AddKillToLog(const FKillfeedEventData& KillInfo)
 {
-    if (HasAuthority())
+    if (HasAuthority()) // This is AActor::HasAuthority(), called on 'this' instance
     {
-        AS_ArenaPlayerState* NewLeader = nullptr;
-        int32 MaxFrags = -1;
+        // KillInfo is now correctly typed as FKillfeedEventData
+        RecentKillsLog.Insert(KillInfo, 0);
 
-        for (APlayerState* PS : PlayerArray)
+        const int32 MaxLogSize = 5;
+        if (RecentKillsLog.Num() > MaxLogSize)
         {
-            AS_ArenaPlayerState* ArenaPS = Cast<AS_ArenaPlayerState>(PS);
-            if (ArenaPS)
-            {
-                if (ArenaPS->GetFrags() > MaxFrags)
-                {
-                    MaxFrags = ArenaPS->GetFrags();
-                    NewLeader = ArenaPS;
-                }
-                else if (ArenaPS->GetFrags() == MaxFrags && MaxFrags != -1)
-                {
-                    NewLeader = nullptr; // Draw, no single leader
-                }
-            }
+            RecentKillsLog.RemoveAt(MaxLogSize, RecentKillsLog.Num() - MaxLogSize);
         }
 
-        if (CurrentLeaderPlayerState != NewLeader)
-        {
-            CurrentLeaderPlayerState = NewLeader;
-            OnRep_CurrentLeader(); // For server-side immediate effect and to trigger replication
-        }
+        OnRep_RecentKills(); // This is this->OnRep_RecentKills(), correct
     }
 }
-*/

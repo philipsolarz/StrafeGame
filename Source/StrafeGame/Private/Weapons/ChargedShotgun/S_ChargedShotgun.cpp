@@ -1,13 +1,12 @@
 // Source/StrafeGame/Private/Weapons/ChargedShotgun/S_ChargedShotgun.cpp
 #include "Weapons/ChargedShotgun/S_ChargedShotgun.h"
-#include "Weapons/ChargedShotgun/S_ChargedShotgunDataAsset.h" // Specific DataAsset
+#include "Weapons/ChargedShotgun/S_ChargedShotgunDataAsset.h" 
 #include "Player/S_Character.h"
-#include "GameFramework/DamageType.h" // For UDamageType
+#include "GameFramework/DamageType.h" 
 #include "Net/UnrealNetwork.h"
 
 AS_ChargedShotgun::AS_ChargedShotgun()
 {
-    // Constructor defaults
     PrimaryChargeProgress = 0.0f;
     SecondaryChargeProgress = 0.0f;
 }
@@ -26,7 +25,7 @@ void AS_ChargedShotgun::ExecutePrimaryFire_Implementation(const FVector& FireSta
     if (!ChargedData)
     {
         UE_LOG(LogTemp, Error, TEXT("AS_ChargedShotgun::ExecutePrimaryFire: WeaponData is not US_ChargedShotgunDataAsset for %s."), *GetNameSafe(this));
-        Super::ExecutePrimaryFire_Implementation(FireStartLocation, FireDirection, EventData); // Call base to log warning
+        Super::ExecutePrimaryFire_Implementation(FireStartLocation, FireDirection, EventData);
         return;
     }
 
@@ -37,8 +36,8 @@ void AS_ChargedShotgun::ExecutePrimaryFire_Implementation(const FVector& FireSta
         ChargedData->PrimaryFirePelletCount,
         ChargedData->PrimaryFireSpreadAngle,
         ChargedData->PrimaryFireHitscanRange,
-        ChargedData->PrimaryFireDamagePerPellet, // This is damage per pellet
-        ChargedData->DamageTypeClass       // DamageTypeClass from base US_HitscanWeaponDataAsset
+        ChargedData->PrimaryFireDamagePerPellet,
+        ChargedData->DamageTypeClass
     );
 }
 
@@ -49,7 +48,7 @@ void AS_ChargedShotgun::ExecuteSecondaryFire_Implementation(const FVector& FireS
     if (!ChargedData)
     {
         UE_LOG(LogTemp, Error, TEXT("AS_ChargedShotgun::ExecuteSecondaryFire: WeaponData is not US_ChargedShotgunDataAsset for %s."), *GetNameSafe(this));
-        Super::ExecuteSecondaryFire_Implementation(FireStartLocation, FireDirection, EventData); // Call base to log warning
+        Super::ExecuteSecondaryFire_Implementation(FireStartLocation, FireDirection, EventData);
         return;
     }
 
@@ -60,37 +59,57 @@ void AS_ChargedShotgun::ExecuteSecondaryFire_Implementation(const FVector& FireS
         ChargedData->SecondaryFirePelletCount,
         ChargedData->SecondaryFireSpreadAngle,
         ChargedData->SecondaryFireHitscanRange,
-        ChargedData->SecondaryFireDamagePerPellet, // Damage per pellet for secondary
-        ChargedData->DamageTypeClass          // DamageTypeClass from base US_HitscanWeaponDataAsset
+        ChargedData->SecondaryFireDamagePerPellet,
+        ChargedData->DamageTypeClass
     );
 }
 
 void AS_ChargedShotgun::SetPrimaryChargeProgress(float Progress)
 {
-    if (HasAuthority())
+    // This function is typically called on the server by an ability
+    if (HasAuthority()) // Or based on your game's prediction model for charge
     {
+        float OldProgress = PrimaryChargeProgress;
         PrimaryChargeProgress = FMath::Clamp(Progress, 0.0f, 1.0f);
-        OnRep_PrimaryChargeProgress(); // Call for immediate local update
+        // Call OnRep manually on server for local effects and to flag for replication
+        OnRep_PrimaryChargeProgress();
+
+        // Broadcast for local ViewModels if progress actually changed
+        if (FMath::Abs(PrimaryChargeProgress - OldProgress) > KINDA_SMALL_NUMBER)
+        {
+            OnPrimaryChargeProgressChanged.Broadcast(PrimaryChargeProgress);
+        }
     }
 }
 
 void AS_ChargedShotgun::SetSecondaryChargeProgress(float Progress)
 {
-    if (HasAuthority())
+    // This function is typically called on the server by an ability
+    if (HasAuthority()) // Or based on your game's prediction model for charge
     {
+        float OldProgress = SecondaryChargeProgress;
         SecondaryChargeProgress = FMath::Clamp(Progress, 0.0f, 1.0f);
-        OnRep_SecondaryChargeProgress(); // Call for immediate local update
+        // Call OnRep manually on server for local effects and to flag for replication
+        OnRep_SecondaryChargeProgress();
+
+        // Broadcast for local ViewModels if progress actually changed
+        if (FMath::Abs(SecondaryChargeProgress - OldProgress) > KINDA_SMALL_NUMBER)
+        {
+            OnSecondaryChargeProgressChanged.Broadcast(SecondaryChargeProgress);
+        }
     }
 }
 
 void AS_ChargedShotgun::OnRep_PrimaryChargeProgress()
 {
     // This is called on clients when the value replicates
-    // Can be used to trigger visual/audio effects based on progress
+    // And manually on server. Broadcast delegate here too for client-side ViewModels.
+    OnPrimaryChargeProgressChanged.Broadcast(PrimaryChargeProgress);
 }
 
 void AS_ChargedShotgun::OnRep_SecondaryChargeProgress()
 {
     // This is called on clients when the value replicates
-    // Can be used to trigger visual/audio effects based on progress
+    // And manually on server. Broadcast delegate here too for client-side ViewModels.
+    OnSecondaryChargeProgressChanged.Broadcast(SecondaryChargeProgress);
 }

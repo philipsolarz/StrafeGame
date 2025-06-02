@@ -7,6 +7,9 @@
 
 class US_ChargedShotgunDataAsset;
 
+// Delegate for charge progress changes
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnChargeProgressChanged, float, NewProgress);
+
 UCLASS(Blueprintable)
 class STRAFEGAME_API AS_ChargedShotgun : public AS_HitscanWeapon
 {
@@ -44,6 +47,12 @@ public:
     void SetPrimaryChargeProgress(float Progress);
     void SetSecondaryChargeProgress(float Progress);
 
+    UPROPERTY(BlueprintAssignable, Category = "ChargedShotgun|Events")
+    FOnChargeProgressChanged OnPrimaryChargeProgressChanged;
+
+    UPROPERTY(BlueprintAssignable, Category = "ChargedShotgun|Events")
+    FOnChargeProgressChanged OnSecondaryChargeProgressChanged;
+
     UFUNCTION(BlueprintImplementableEvent, Category = "ChargedShotgun|Effects", meta = (DisplayName = "On Primary Charge Start"))
     void K2_OnPrimaryChargeStart();
 
@@ -66,11 +75,9 @@ public:
     void K2_OnSecondaryChargeCancelled();
 
 protected:
-    /** Current charge progress for primary fire (0.0 to 1.0). Replicated. */
     UPROPERTY(Transient, ReplicatedUsing = OnRep_PrimaryChargeProgress)
     float PrimaryChargeProgress;
 
-    /** Current charge progress for secondary fire (0.0 to 1.0). Replicated. */
     UPROPERTY(Transient, ReplicatedUsing = OnRep_SecondaryChargeProgress)
     float SecondaryChargeProgress;
 
