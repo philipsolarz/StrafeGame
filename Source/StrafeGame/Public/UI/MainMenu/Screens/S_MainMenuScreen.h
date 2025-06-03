@@ -1,9 +1,9 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Source/StrafeGame/Public/UI/MainMenu/Screens/S_MainMenuScreen.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
-#include "UI/MainMenu/MenuScreenInterface.h" // Updated include
+#include "UI/MainMenu/MenuScreenInterface.h"
 #include "S_MainMenuScreen.generated.h"
 
 class UCommonButtonBase;
@@ -51,7 +51,8 @@ protected:
     UFUNCTION()
     void OnQuitGameClicked();
 
-    void OnQuitGameConfirmed(bool bConfirmed);
+    UFUNCTION() // Made UFUNCTION for AddDynamic
+        void OnQuitGameConfirmed(bool bConfirmed);
 
 private:
     UPROPERTY()

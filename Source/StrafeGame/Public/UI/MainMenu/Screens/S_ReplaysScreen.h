@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Source/StrafeGame/Public/UI/MainMenu/Screens/S_ReplaysScreen.h
 #pragma once
 
 #include "CoreMinimal.h"
@@ -65,6 +65,6 @@ private:
 
     void PopulateReplayList();
 
-    // Added declaration for the handler
-    void HandleDeleteReplayConfirmed(bool bConfirmed);
+    UFUNCTION() // Made UFUNCTION for AddDynamic
+        void HandleDeleteReplayConfirmed(bool bConfirmed);
 };

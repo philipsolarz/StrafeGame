@@ -1,12 +1,12 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-#include "UI/MainMenu/Screens/S_FindGameScreen.h" // Updated include
+// Source/StrafeGame/Private/UI/MainMenu/Screens/S_FindGameScreen.cpp
+#include "UI/MainMenu/Screens/S_FindGameScreen.h"
 #include "CommonButtonBase.h"
 #include "Components/EditableTextBox.h"
 #include "Components/ListView.h"
-#include "UI/MainMenu/Widgets/US_ServerRowWidget.h" // This is the entry widget, ensure US_ServerRowData is also known
-#include "UI/MainMenu/MenuManagerSubsystem.h" // Updated include
+#include "UI/MainMenu/Widgets/S_ServerRowWidget.h" // Corrected include path
+#include "UI/MainMenu/MenuManagerSubsystem.h"
 #include "OnlineSubsystem.h"
-#include "OnlineSessionSettings.h"
+#include "OnlineSessionSettings.h" // For FOnlineSessionSearchResult and SETTING_MAPNAME
 #include "Kismet/GameplayStatics.h"
 
 US_FindGameScreen::US_FindGameScreen()
@@ -36,8 +36,6 @@ void US_FindGameScreen::NativeConstruct()
     }
     if (ServerListView)
     {
-        // Corrected: Use OnItemSelectionChanged delegate if available, or OnObjectSelected if it's a UObject based list view.
-        // CommonListView uses OnItemSelectionChanged typically.
         ServerListView->OnItemSelectionChanged().AddUObject(this, &US_FindGameScreen::OnServerSelected);
     }
 
@@ -123,11 +121,31 @@ void US_FindGameScreen::OnServerSelected(UObject* Item)
     US_ServerRowData* RowData = Cast<US_ServerRowData>(Item);
     if (RowData && SessionSearch.IsValid())
     {
-        // To find the correct FOnlineSessionSearchResult, we need to iterate or have a better mapping.
-        // For simplicity, if RowData itself could store an index or if the ListView gives an index:
-        int32 SelectedIdx = ServerListView->GetIndexForItem(Item); // Assumes ListView can provide this
-        if (SessionSearch->SearchResults.IsValidIndex(SelectedIdx)) {
-            SelectedSessionResult = SessionSearch->SearchResults[SelectedIdx];
+        // Find the session result corresponding to the selected row.
+        // This assumes the list items are in the same order as search results and filter is applied client-side.
+        // A more robust way would be to store the FOnlineSessionSearchResult directly in US_ServerRowData
+        // or to find it by a unique ID if available.
+        // For now, relying on the order after client-side filtering.
+        int32 FoundIdx = -1;
+        for (int32 i = 0; i < SessionSearch->SearchResults.Num(); ++i)
+        {
+            const auto& Result = SessionSearch->SearchResults[i];
+            FString ServerDisplayName = TEXT("Unnamed Server");
+            Result.Session.SessionSettings.Get(FName(TEXT("SESSION_DISPLAY_NAME")), ServerDisplayName);
+            if (ServerDisplayName == RowData->ServerName) // Simplistic match; real-world might need SessionId
+            {
+                FString MapNameFromSession;
+                Result.Session.SessionSettings.Get(SETTING_MAPNAME, MapNameFromSession);
+                if (MapNameFromSession == RowData->MapName) // Further refine match
+                {
+                    FoundIdx = i;
+                    break;
+                }
+            }
+        }
+
+        if (SessionSearch->SearchResults.IsValidIndex(FoundIdx)) {
+            SelectedSessionResult = SessionSearch->SearchResults[FoundIdx];
             if (Btn_JoinGame) Btn_JoinGame->SetIsEnabled(true);
             UE_LOG(LogTemp, Log, TEXT("Server selected: %s"), *SelectedSessionResult.GetValue().Session.OwningUserName);
             return;
@@ -140,6 +158,12 @@ void US_FindGameScreen::OnServerSelected(UObject* Item)
 
 void US_FindGameScreen::FindGameSessions()
 {
+    if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(false); // Disable while searching
+    if (ServerListView) ServerListView->ClearListItems();
+    SelectedSessionResult.Reset();
+    if (Btn_JoinGame) Btn_JoinGame->SetIsEnabled(false);
+
+
     IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
     if (OnlineSub)
     {
@@ -149,7 +173,7 @@ void US_FindGameScreen::FindGameSessions()
             SessionSearch = MakeShareable(new FOnlineSessionSearch());
             SessionSearch->MaxSearchResults = 20;
             SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
-            // SessionSearch->bIsLanQuery = false; 
+            SessionSearch->bIsLanQuery = false; // Set to true for LAN searches
 
             FindSessionsCompleteDelegate = FOnFindSessionsCompleteDelegate::CreateUObject(this, &US_FindGameScreen::OnFindSessionsComplete);
             FindSessionsCompleteDelegateHandle = SessionInterface->AddOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegate);
@@ -161,6 +185,7 @@ void US_FindGameScreen::FindGameSessions()
                 {
                     SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
                     UE_LOG(LogTemp, Error, TEXT("Failed to start FindSessions."));
+                    if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
                 }
                 else
                 {
@@ -173,6 +198,8 @@ void US_FindGameScreen::FindGameSessions()
 
 void US_FindGameScreen::OnFindSessionsComplete(bool bWasSuccessful)
 {
+    if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true); // Re-enable after search
+
     IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
     if (OnlineSub)
     {
@@ -214,7 +241,7 @@ void US_FindGameScreen::PopulateServerList(const TArray<FOnlineSessionSearchResu
             continue;
         }
 
-        US_ServerRowData* Item = NewObject<US_ServerRowData>(this);
+        US_ServerRowData* Item = NewObject<US_ServerRowData>(this); // Ensure 'this' is a valid Outer
         if (Item)
         {
             Item->ServerName = ServerDisplayName;
@@ -249,7 +276,7 @@ void US_FindGameScreen::OnJoinSessionComplete(FName SessionName, EOnJoinSessionC
             if (OnlineSub && OnlineSub->GetSessionInterface().IsValid() && OnlineSub->GetSessionInterface()->GetResolvedConnectString(SessionName, ConnectString))
             {
                 PC->ClientTravel(ConnectString, TRAVEL_Absolute);
-                if (MenuManager) MenuManager->ToggleMainMenu();
+                if (MenuManager) MenuManager->ToggleMainMenu(); // Close menu after joining
             }
             else
             {
@@ -260,5 +287,6 @@ void US_FindGameScreen::OnJoinSessionComplete(FName SessionName, EOnJoinSessionC
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to join session. Result: %d"), static_cast<int32>(Result));
+        // Optionally show an error message to the player
     }
 }
