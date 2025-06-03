@@ -1,3 +1,4 @@
+// Source/StrafeGame/Private/UI/ViewModels/S_PlayerHUDViewModel.cpp
 #include "UI/ViewModels/S_PlayerHUDViewModel.h"
 #include "Player/S_PlayerController.h"
 #include "Player/S_PlayerState.h"
@@ -5,7 +6,10 @@
 #include "Player/Components/S_WeaponInventoryComponent.h"
 #include "Player/S_Character.h"
 #include "Weapons/S_Weapon.h"
-#include "UI/ViewModels/S_WeaponViewModel.h" // Include the specific ViewModel
+#include "Weapons/S_WeaponDataAsset.h" // Include WeaponDataAsset
+#include "UI/ViewModels/S_WeaponViewModel.h" 
+#include "UI/ViewModels/S_ChargedShotgunViewModel.h" // For specific ViewModel creation
+#include "UI/ViewModels/S_StickyGrenadeLauncherViewModel.h" // For specific ViewModel creation
 #include "AbilitySystemComponent.h"
 
 void US_PlayerHUDViewModel::Initialize(AS_PlayerController* InOwningPlayerController)
@@ -28,9 +32,6 @@ void US_PlayerHUDViewModel::Initialize(AS_PlayerController* InOwningPlayerContro
         {
             HealthChangedDelegateHandle = PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetHealthAttribute()).AddUObject(this, &US_PlayerHUDViewModel::HandleHealthChanged);
             MaxHealthChangedDelegateHandle = PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetMaxHealthAttribute()).AddUObject(this, &US_PlayerHUDViewModel::HandleMaxHealthChanged);
-            // TODO: Bind to Armor attributes if they exist
-            // ArmorChangedDelegateHandle = PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetArmorAttribute()).AddUObject(this, &US_PlayerHUDViewModel::HandleArmorChanged);
-            // MaxArmorChangedDelegateHandle = PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetMaxArmorAttribute()).AddUObject(this, &US_PlayerHUDViewModel::HandleMaxArmorChanged);
         }
 
         if (WeaponInventoryComponent.IsValid())
@@ -46,9 +47,10 @@ void US_PlayerHUDViewModel::Deinitialize()
 {
     if (PlayerAbilitySystemComponent.IsValid() && PlayerAttributeSet.IsValid())
     {
-        PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetHealthAttribute()).Remove(HealthChangedDelegateHandle);
-        PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetMaxHealthAttribute()).Remove(MaxHealthChangedDelegateHandle);
-        // TODO: Unbind Armor attributes
+        if (HealthChangedDelegateHandle.IsValid())
+            PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetHealthAttribute()).Remove(HealthChangedDelegateHandle);
+        if (MaxHealthChangedDelegateHandle.IsValid())
+            PlayerAbilitySystemComponent->GetGameplayAttributeValueChangeDelegate(PlayerAttributeSet->GetMaxHealthAttribute()).Remove(MaxHealthChangedDelegateHandle);
     }
     if (WeaponInventoryComponent.IsValid())
     {
@@ -56,7 +58,13 @@ void US_PlayerHUDViewModel::Deinitialize()
         WeaponInventoryComponent->OnWeaponAddedDelegate.RemoveDynamic(this, &US_PlayerHUDViewModel::HandleWeaponAdded);
     }
 
+    // Deinitialize and clear ViewModels
+    for (US_WeaponViewModel* VM : WeaponInventoryViewModels)
+    {
+        if (VM) VM->Deinitialize();
+    }
     WeaponInventoryViewModels.Empty();
+    if (EquippedWeaponViewModel) EquippedWeaponViewModel->Deinitialize();
     EquippedWeaponViewModel = nullptr;
 
     Super::Deinitialize();
@@ -68,8 +76,8 @@ void US_PlayerHUDViewModel::RefreshAllData()
     UpdateMaxHealth();
     UpdateArmor();
     UpdateMaxArmor();
-    UpdateWeaponInventory();
-    UpdateEquippedWeapon(); // This ensures equipped weapon VM is also created/updated
+    UpdateWeaponInventory(); // This needs to be called before UpdateEquippedWeapon
+    UpdateEquippedWeapon();
     OnViewModelUpdated.Broadcast();
 }
 
@@ -78,7 +86,7 @@ void US_PlayerHUDViewModel::UpdateHealth()
     if (PlayerAttributeSet.IsValid())
     {
         CurrentHealth = PlayerAttributeSet->GetHealth();
-        MaxHealth = PlayerAttributeSet->GetMaxHealth(); // Ensure MaxHealth is also up-to-date
+        MaxHealth = PlayerAttributeSet->GetMaxHealth();
         HealthPercentage = (MaxHealth > 0) ? (CurrentHealth / MaxHealth) : 0.0f;
     }
 }
@@ -94,40 +102,40 @@ void US_PlayerHUDViewModel::UpdateMaxHealth()
 
 void US_PlayerHUDViewModel::UpdateArmor()
 {
-    // TODO: Implement if Armor attribute exists
-    // if (PlayerAttributeSet.IsValid())
-    // {
-    //     CurrentArmor = PlayerAttributeSet->GetArmor();
-    //     ArmorPercentage = (MaxArmor > 0) ? (CurrentArmor / MaxArmor) : 0.0f;
-    // }
-    CurrentArmor = 0; // Placeholder
-    ArmorPercentage = 0; // Placeholder
+    CurrentArmor = 0;
+    ArmorPercentage = 0;
 }
 
 void US_PlayerHUDViewModel::UpdateMaxArmor()
 {
-    // TODO: Implement if MaxArmor attribute exists
-    // if (PlayerAttributeSet.IsValid())
-    // {
-    //     MaxArmor = PlayerAttributeSet->GetMaxArmor();
-    //     ArmorPercentage = (MaxArmor > 0) ? (CurrentArmor / MaxArmor) : 0.0f;
-    // }
-    MaxArmor = 0; // Placeholder
-    ArmorPercentage = 0; // Placeholder
+    MaxArmor = 0;
+    ArmorPercentage = 0;
 }
 
 void US_PlayerHUDViewModel::UpdateWeaponInventory()
 {
-    WeaponInventoryViewModels.Empty(); // Clear existing
+    // Deinitialize old ViewModels first
+    for (US_WeaponViewModel* VM : WeaponInventoryViewModels)
+    {
+        if (VM) VM->Deinitialize();
+    }
+    WeaponInventoryViewModels.Empty();
+
     if (WeaponInventoryComponent.IsValid() && GetOwningPlayerController())
     {
         const TArray<AS_Weapon*>& InventoryList = WeaponInventoryComponent->GetWeaponInventoryList();
         for (AS_Weapon* Weapon : InventoryList)
         {
-            if (Weapon)
+            if (Weapon && Weapon->GetWeaponData())
             {
-                US_WeaponViewModel* WeaponVM = NewObject<US_WeaponViewModel>(this); // 'this' is the outer
-                WeaponVM->Initialize(GetOwningPlayerController(), Weapon); // Custom Initialize for WeaponViewModel
+                TSubclassOf<US_WeaponViewModel> ViewModelClass = Weapon->GetWeaponData()->WeaponViewModelClass;
+                if (!ViewModelClass) // Fallback to base if not specified
+                {
+                    ViewModelClass = US_WeaponViewModel::StaticClass();
+                }
+
+                US_WeaponViewModel* WeaponVM = NewObject<US_WeaponViewModel>(this, ViewModelClass);
+                WeaponVM->Initialize(GetOwningPlayerController(), Weapon);
                 WeaponInventoryViewModels.Add(WeaponVM);
             }
         }
@@ -136,49 +144,31 @@ void US_PlayerHUDViewModel::UpdateWeaponInventory()
 
 void US_PlayerHUDViewModel::UpdateEquippedWeapon()
 {
-    if (WeaponInventoryComponent.IsValid() && GetOwningPlayerController())
+    EquippedWeaponViewModel = nullptr; // Reset first
+
+    if (WeaponInventoryComponent.IsValid())
     {
         AS_Weapon* EquippedWeaponActor = WeaponInventoryComponent->GetCurrentWeapon();
-        if (EquippedWeaponActor)
+
+        // Set bIsEquipped on all inventory VMs
+        for (US_WeaponViewModel* VM : WeaponInventoryViewModels)
         {
-            // Find existing VM or create new one
-            bool bFound = false;
-            for (US_WeaponViewModel* VM : WeaponInventoryViewModels)
+            if (VM)
             {
-                if (VM && VM->GetWeaponActor() == EquippedWeaponActor)
+                VM->SetIsEquipped(VM->GetWeaponActor() == EquippedWeaponActor);
+                if (VM->GetWeaponActor() == EquippedWeaponActor)
                 {
                     EquippedWeaponViewModel = VM;
-                    VM->SetIsEquipped(true);
-                    bFound = true;
                 }
-                else if (VM)
-                {
-                    VM->SetIsEquipped(false);
-                }
-            }
-            if (!bFound) // Should not happen if UpdateWeaponInventory was called first
-            {
-                US_WeaponViewModel* WeaponVM = NewObject<US_WeaponViewModel>(this);
-                WeaponVM->Initialize(GetOwningPlayerController(), EquippedWeaponActor);
-                WeaponVM->SetIsEquipped(true);
-                EquippedWeaponViewModel = WeaponVM;
-                // Add to inventory viewmodels if somehow missed
-                if (!WeaponInventoryViewModels.Contains(WeaponVM))
-                {
-                    WeaponInventoryViewModels.Add(WeaponVM);
-                }
-            }
-        }
-        else
-        {
-            EquippedWeaponViewModel = nullptr;
-            for (US_WeaponViewModel* VM : WeaponInventoryViewModels)
-            {
-                if (VM) VM->SetIsEquipped(false);
             }
         }
     }
+    // If EquippedWeaponViewModel is still null here but there's an equipped weapon,
+    // it means UpdateWeaponInventory might not have created the correct ViewModel for it,
+    // or the weapon isn't in the WeaponInventoryViewModels list.
+    // The loop above should handle finding it if UpdateWeaponInventory ran correctly.
 }
+
 
 void US_PlayerHUDViewModel::HandleHealthChanged(const FOnAttributeChangeData& Data)
 {
@@ -196,30 +186,26 @@ void US_PlayerHUDViewModel::HandleMaxHealthChanged(const FOnAttributeChangeData&
 
 void US_PlayerHUDViewModel::HandleArmorChanged(const FOnAttributeChangeData& Data)
 {
-    // TODO: Implement if Armor attribute exists
-    // CurrentArmor = Data.NewValue;
-    // ArmorPercentage = (MaxArmor > 0) ? (CurrentArmor / MaxArmor) : 0.0f;
     OnViewModelUpdated.Broadcast();
 }
 
 void US_PlayerHUDViewModel::HandleMaxArmorChanged(const FOnAttributeChangeData& Data)
 {
-    // TODO: Implement if MaxArmor attribute exists
-    // MaxArmor = Data.NewValue;
-    // ArmorPercentage = (MaxArmor > 0) ? (CurrentArmor / MaxArmor) : 0.0f;
     OnViewModelUpdated.Broadcast();
 }
 
 void US_PlayerHUDViewModel::HandleWeaponEquipped(AS_Weapon* NewWeapon, AS_Weapon* OldWeapon)
 {
-    // Full refresh might be easier here, or selectively update the equipped status
-    UpdateWeaponInventory(); // This will re-create VMs if needed
-    UpdateEquippedWeapon();
+    // It's important that UpdateWeaponInventory is robust enough if a new weapon (not previously in list) is equipped.
+    // The current UpdateWeaponInventory rebuilds the list, which is fine.
+    UpdateWeaponInventory(); // Ensures all VMs are up-to-date or created
+    UpdateEquippedWeapon();  // Sets the correct equipped VM and updates bIsEquipped flags
     OnViewModelUpdated.Broadcast();
 }
 
 void US_PlayerHUDViewModel::HandleWeaponAdded(TSubclassOf<AS_Weapon> WeaponClass)
 {
-    UpdateWeaponInventory(); // Rebuild the list of weapon VMs
+    UpdateWeaponInventory();
+    UpdateEquippedWeapon(); // Also update equipped status in case the added weapon was auto-equipped
     OnViewModelUpdated.Broadcast();
 }

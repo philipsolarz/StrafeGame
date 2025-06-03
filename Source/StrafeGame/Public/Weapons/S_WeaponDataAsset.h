@@ -1,3 +1,4 @@
+// Source/StrafeGame/Public/Weapons/S_WeaponDataAsset.h
 #pragma once
 
 #include "CoreMinimal.h"
@@ -16,6 +17,7 @@ class USoundBase;
 class UTexture2D;
 class UNiagaraSystem;
 class AS_Weapon;
+class US_WeaponViewModel; // Forward declare base ViewModel
 
 UCLASS(BlueprintType, Abstract)
 class STRAFEGAME_API US_WeaponDataAsset : public UPrimaryDataAsset
@@ -47,9 +49,8 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attachment")
     FName AttachmentSocketName;
 
-    // Socket on the weapon mesh for muzzle flash VFX.
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Attachment")
-    FName MuzzleFlashSocketName; // ADDED
+    FName MuzzleFlashSocketName;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Timing", meta = (ClampMin = "0.0"))
     float EquipTime;
@@ -63,10 +64,12 @@ public:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI")
     TSoftObjectPtr<UTexture2D> WeaponIcon;
 
-    // Maximum range for aiming traces (e.g., camera trace to find target point).
-    // This might be different from a hitscan weapon's effective MaxRange.
+    // ADDED: Specify the ViewModel class for this weapon type
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI", meta = (DisplayName = "Weapon View Model Class"))
+    TSubclassOf<US_WeaponViewModel> WeaponViewModelClass;
+
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Weapon Mechanics", meta = (ClampMin = "0.0"))
-    float MaxAimTraceRange; // ADDED
+    float MaxAimTraceRange;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "GAS|Abilities")
     TSubclassOf<UGameplayAbility> PrimaryFireAbilityClass;

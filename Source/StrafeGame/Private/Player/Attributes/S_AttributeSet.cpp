@@ -7,9 +7,16 @@
 US_AttributeSet::US_AttributeSet()
 {
     // Initialize default values here if necessary, though GameplayEffects are preferred for base values.
-    // Example: InitHealth(100.0f); InitMaxHealth(100.0f);
-    // InitRocketAmmo(0.f); InitMaxRocketAmmo(10.f); // Default starting values
-    // These are base values. GameplayEffects will set the initial "CurrentValue".
+    InitHealth(100.0f);     // Initialize Health to 100
+    InitMaxHealth(100.0f);  // Initialize MaxHealth to 100
+
+    // Initialize other attributes as needed
+    InitRocketAmmo(0.f);
+    InitMaxRocketAmmo(999.f); // Example
+    InitStickyGrenadeAmmo(0.f);
+    InitMaxStickyGrenadeAmmo(999.f); // Example
+    InitShotgunAmmo(0.f);
+    InitMaxShotgunAmmo(999.f); // Example
 }
 
 void US_AttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
