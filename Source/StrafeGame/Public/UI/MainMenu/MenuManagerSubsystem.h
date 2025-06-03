@@ -3,16 +3,14 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
-#include "CommonActivatableWidget.h"
-#include "InputMappingContext.h"
-#include "Widgets/CommonActivatableWidgetContainer.h" // Corrected path if it was different
+#include "CommonActivatableWidget.h"    // For TSubclassOf
+#include "InputMappingContext.h"        // For UInputMappingContext
 #include "MenuManagerSubsystem.generated.h"
 
 class US_MainMenuScreen;
 class US_ConfirmDialogWidget;
 class UInputAction;
-class UCommonActivatableWidgetStack; // Forward declare
-
+class APlayerController; // Added forward declaration
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnConfirmDialogResultSet, bool, bConfirmed);
 
@@ -25,8 +23,12 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     virtual void Deinitialize() override;
 
+    // Changed: Takes PlayerController to correctly associate the menu.
     UFUNCTION(BlueprintCallable, Category = "Menu Manager")
-    void ToggleMainMenu();
+    void ShowInitialMenu(APlayerController* ForPlayerController);
+
+    UFUNCTION(BlueprintCallable, Category = "Menu Manager")
+    void CloseMainMenu(APlayerController* ForPlayerController); // Optional: if you need to explicitly close it
 
     UFUNCTION(BlueprintCallable, Category = "Menu Manager")
     void ShowScreen(TSubclassOf<UCommonActivatableWidget> ScreenWidgetClass);
@@ -40,12 +42,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Menu Manager|Events")
     FOnConfirmDialogResultSet OnConfirmDialogResultSet;
 
-    UFUNCTION(BlueprintPure, Category = "Menu Manager|Input")
-    UInputAction* GetToggleMenuAction() const { return ToggleMenuAction; }
-
-    UFUNCTION(BlueprintPure, Category = "Menu Manager|Internal")
-    UCommonActivatableWidgetStack* GetActiveWidgetStack() const;
-
+    // Getter for ToggleMenuAction might not be relevant if menu is always shown in its own level.
+    // UFUNCTION(BlueprintPure, Category = "Menu Manager|Input")
+    // UInputAction* GetToggleMenuAction() const { return ToggleMenuAction; }
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "Menu Manager|Config")
@@ -54,21 +53,25 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Menu Manager|Config")
     TSoftClassPtr<US_ConfirmDialogWidget> ConfirmDialogClass;
 
-    UPROPERTY(EditDefaultsOnly, Category = "Menu Manager|Input")
+    UPROPERTY(EditDefaultsOnly, Category = "Menu Manager|Input", meta = (Tooltip = "Input Mapping Context to apply when menu is active."))
     TSoftObjectPtr<UInputMappingContext> MenuInputMappingContext;
 
-    UPROPERTY(EditDefaultsOnly, Category = "Menu Manager|Input")
-    TObjectPtr<UInputAction> ToggleMenuAction;
+    // ToggleMenuAction might be repurposed or removed if menu is always on in its dedicated level.
+    // UPROPERTY(EditDefaultsOnly, Category = "Menu Manager|Input")
+    // TObjectPtr<UInputAction> ToggleMenuAction;
 
 private:
+    UPROPERTY() // This instance is per-local player if supporting split-screen, otherwise, one instance.
+        TObjectPtr<US_MainMenuScreen> MainMenuScreenInstance;
+
+    // For the confirmation dialog
     UPROPERTY()
-    TObjectPtr<UCommonActivatableWidgetStack> ActiveWidgetStack;
+    TObjectPtr<US_ConfirmDialogWidget> ActiveConfirmDialog;
 
-    UPROPERTY()
-    TObjectPtr<US_MainMenuScreen> MainMenuScreenInstance;
 
-    UFUNCTION() // Ensure this is a UFUNCTION for AddDynamic
-        void HandleConfirmDialogClosedInternal(bool bConfirmed);
+    UFUNCTION()
+    void HandleConfirmDialogClosedInternal(bool bConfirmed);
 
-    bool bIsMenuOpen;
+    // Helper to get the player controller, assumes single local player for now.
+    APlayerController* GetLocalPlayerController() const;
 };
