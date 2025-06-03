@@ -1,17 +1,19 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Source/StrafeGame/Public/UI/MainMenu/Screens/S_FindGameScreen.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
 #include "Interfaces/OnlineSessionInterface.h"
-#include "UI/MainMenu/MenuScreenInterface.h" // Updated include
+#include "OnlineSessionSettings.h" // Added for FOnlineSessionSearchResult definition
+#include "UI/MainMenu/MenuScreenInterface.h"
 #include "S_FindGameScreen.generated.h"
 
 class UCommonButtonBase;
 class UEditableTextBox;
-class US_ServerRowData; // Updated: Now US_ServerRowData for list items
+class US_ServerRowData; // Forward declaration for the list item data UObject
 class UListView;
 class UMenuManagerSubsystem;
+// FOnlineSessionSearchResult is now defined via OnlineSessionSettings.h
 
 UCLASS()
 class STRAFEGAME_API US_FindGameScreen : public UCommonActivatableWidget, public IMenuScreenInterface

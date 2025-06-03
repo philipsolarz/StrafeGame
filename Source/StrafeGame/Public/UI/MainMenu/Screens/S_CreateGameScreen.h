@@ -1,15 +1,16 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Source/StrafeGame/Public/UI/MainMenu/Screens/S_CreateGameScreen.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
 #include "Interfaces/OnlineSessionInterface.h"
-#include "UI/MainMenu/MenuScreenInterface.h" // Updated include
+#include "Components/ComboBoxString.h" // For ESelectInfo::Type
+#include "UI/MainMenu/MenuScreenInterface.h"
 #include "S_CreateGameScreen.generated.h"
 
 class UCommonButtonBase;
 class UEditableTextBox;
-class UComboBoxString;
+//class UComboBoxString; // Already included
 class UCheckBox;
 class USpinBox;
 class UMenuManagerSubsystem;
@@ -71,6 +72,10 @@ private:
 
     void PopulateGameModes();
 
-    UFUNCTION() // Must be UFUNCTION for delegate binding
-        void PopulateMapsForGameMode(const FString& GameMode);
+    // New function with correct signature for delegate binding
+    UFUNCTION()
+    void OnGameModeSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
+
+    // Original logic function
+    void PopulateMapsForGameMode(const FString& GameMode);
 };

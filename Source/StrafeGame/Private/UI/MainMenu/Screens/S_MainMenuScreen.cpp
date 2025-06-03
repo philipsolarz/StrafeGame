@@ -1,12 +1,12 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-#include "UI/MainMenu/Screens/S_MainMenuScreen.h" // Updated include
+// Source/StrafeGame/Private/UI/MainMenu/Screens/S_MainMenuScreen.cpp
+#include "UI/MainMenu/Screens/S_MainMenuScreen.h"
 #include "CommonButtonBase.h"
-#include "UI/MainMenu/MenuManagerSubsystem.h" // Updated include
+#include "UI/MainMenu/MenuManagerSubsystem.h"
 #include "Kismet/GameplayStatics.h"
-#include "UI/MainMenu/Screens/S_CreateGameScreen.h" // Updated include
-#include "UI/MainMenu/Screens/S_FindGameScreen.h"   // Updated include
-#include "UI/MainMenu/Screens/S_ReplaysScreen.h"  // Updated include
-#include "UI/MainMenu/Screens/S_SettingsScreen.h" // Updated include
+#include "UI/MainMenu/Screens/S_CreateGameScreen.h"
+#include "UI/MainMenu/Screens/S_FindGameScreen.h"
+#include "UI/MainMenu/Screens/S_ReplaysScreen.h"
+#include "UI/MainMenu/Screens/S_SettingsScreen.h"
 
 void US_MainMenuScreen::NativeConstruct()
 {
@@ -75,9 +75,8 @@ void US_MainMenuScreen::OnQuitGameClicked()
 {
     if (MenuManager)
     {
-        // Bind to the manager's broadcast delegate for this specific action
-        MenuManager->OnConfirmDialogResultSet.Clear(); // Clear previous temporary bindings
-        MenuManager->OnConfirmDialogResultSet.AddUObject(this, &US_MainMenuScreen::OnQuitGameConfirmed);
+        MenuManager->OnConfirmDialogResultSet.Clear();
+        MenuManager->OnConfirmDialogResultSet.AddDynamic(this, &US_MainMenuScreen::OnQuitGameConfirmed);
         MenuManager->ShowConfirmDialog(FText::FromString("Quit Game"), FText::FromString("Are you sure you want to quit?"));
     }
 }
@@ -92,9 +91,8 @@ void US_MainMenuScreen::OnQuitGameConfirmed(bool bConfirmed)
             PC->ConsoleCommand("quit");
         }
     }
-    // Unbind from the manager's delegate after handling the result
     if (MenuManager)
     {
-        MenuManager->OnConfirmDialogResultSet.RemoveAll(this); // Or more specific RemoveUObject if needed
+        MenuManager->OnConfirmDialogResultSet.RemoveDynamic(this, &US_MainMenuScreen::OnQuitGameConfirmed);
     }
 }

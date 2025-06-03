@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Source/StrafeGame/Private/UI/MainMenu/Screens/S_ReplaysScreen.cpp
 #include "UI/MainMenu/Screens/S_ReplaysScreen.h"
 #include "CommonButtonBase.h"
 #include "Components/ListView.h"
@@ -41,9 +41,10 @@ void US_ReplaysScreen::PopulateReplayList()
     if (!ReplayListView) return;
     ReplayListView->ClearListItems();
 
+    // Placeholder data
     for (int32 i = 0; i < 3; ++i)
     {
-        US_ReplayListItemData* Item = NewObject<US_ReplayListItemData>(this);
+        US_ReplayListItemData* Item = NewObject<US_ReplayListItemData>(this); // Ensure 'this' is a valid Outer
         Item->FileName = FString::Printf(TEXT("Replay_%d.replay"), i + 1);
         Item->Timestamp = FDateTime::UtcNow() - FTimespan::FromDays(i);
         Item->Duration = FTimespan::FromMinutes(5 + i * 2);
@@ -64,30 +65,29 @@ void US_ReplaysScreen::OnPlayReplayClicked()
     if (SelectedReplayData)
     {
         UE_LOG(LogTemp, Log, TEXT("Attempting to play replay: %s"), *SelectedReplayData->FileName);
-        // APlayerController* PC = GetOwningPlayer();
-        // if (PC)
-        // {
-        //    PC->ConsoleCommand(FString::Printf(TEXT("demoplay %s"), *SelectedReplayData->FileName));
-        // }
+        APlayerController* PC = GetOwningPlayer();
+        if (PC)
+        {
+            PC->ConsoleCommand(FString::Printf(TEXT("demoplay %s"), *SelectedReplayData->FileName));
+        }
     }
 }
 
-// This is the callback function that will be bound to OnConfirmDialogResultSet
 void US_ReplaysScreen::HandleDeleteReplayConfirmed(bool bConfirmed)
 {
     if (bConfirmed && SelectedReplayData)
     {
         UE_LOG(LogTemp, Log, TEXT("Attempting to delete replay: %s"), *SelectedReplayData->FileName);
         // TODO: Implement actual replay file deletion logic here
-        ReplayListView->RemoveItem(SelectedReplayData);
-        SelectedReplayData = nullptr; // Clear selection after deletion
+        // For UI demonstration, we'll just remove it from the list
+        if (ReplayListView) ReplayListView->RemoveItem(SelectedReplayData);
+        SelectedReplayData = nullptr;
         if (Btn_PlayReplay) Btn_PlayReplay->SetIsEnabled(false);
         if (Btn_DeleteReplay) Btn_DeleteReplay->SetIsEnabled(false);
     }
-    // Unbind from the manager's delegate
     if (MenuManager)
     {
-        MenuManager->OnConfirmDialogResultSet.RemoveAll(this);
+        MenuManager->OnConfirmDialogResultSet.RemoveDynamic(this, &US_ReplaysScreen::HandleDeleteReplayConfirmed);
     }
 }
 
@@ -96,13 +96,12 @@ void US_ReplaysScreen::OnDeleteReplayClicked()
 {
     if (SelectedReplayData && MenuManager)
     {
-        // Bind to the manager's broadcast delegate for this specific action
-        MenuManager->OnConfirmDialogResultSet.Clear(); // Clear previous temporary bindings
-        MenuManager->OnConfirmDialogResultSet.AddUObject(this, &US_ReplaysScreen::HandleDeleteReplayConfirmed);
+        MenuManager->OnConfirmDialogResultSet.Clear();
+        MenuManager->OnConfirmDialogResultSet.AddDynamic(this, &US_ReplaysScreen::HandleDeleteReplayConfirmed);
 
         MenuManager->ShowConfirmDialog(
             FText::FromString("Delete Replay"),
-            FText::Format(NSLOCTEXT("Replays", "DeleteConfirmMsg", "Are you sure you want to delete {0}?"), FText::FromString(SelectedReplayData->FileName))
+            FText::Format(NSLOCTEXT("ReplaysScreen", "DeleteConfirmMsgFmt", "Are you sure you want to delete {0}?"), FText::FromString(SelectedReplayData->FileName))
         );
     }
 }

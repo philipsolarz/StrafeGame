@@ -1,18 +1,19 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Source/StrafeGame/Public/UI/MainMenu/MenuManagerSubsystem.h
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "CommonActivatableWidget.h"
 #include "InputMappingContext.h"
-#include "Widgets/CommonActivatableWidgetContainer.h"
+#include "Widgets/CommonActivatableWidgetContainer.h" // Corrected path if it was different
 #include "MenuManagerSubsystem.generated.h"
 
 class US_MainMenuScreen;
 class US_ConfirmDialogWidget;
 class UInputAction;
+class UCommonActivatableWidgetStack; // Forward declare
 
-// This delegate is now primarily for Blueprint binding and C++ internal broadcast
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnConfirmDialogResultSet, bool, bConfirmed);
 
 UCLASS()
@@ -33,17 +34,18 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Menu Manager")
     void CloseTopmostScreen();
 
-    // Changed: Removed FOnConfirmDialogClosed parameter for BP compatibility
     UFUNCTION(BlueprintCallable, Category = "Menu Manager")
     void ShowConfirmDialog(const FText& Title, const FText& Message);
 
-    // This delegate is broadcast when a confirmation dialog shown via this subsystem is closed.
-    // C++ callers should bind to this BEFORE calling ShowConfirmDialog if they need a callback.
     UPROPERTY(BlueprintAssignable, Category = "Menu Manager|Events")
-    FOnConfirmDialogResultSet OnConfirmDialogResultSet; // Renamed
+    FOnConfirmDialogResultSet OnConfirmDialogResultSet;
 
     UFUNCTION(BlueprintPure, Category = "Menu Manager|Input")
     UInputAction* GetToggleMenuAction() const { return ToggleMenuAction; }
+
+    UFUNCTION(BlueprintPure, Category = "Menu Manager|Internal")
+    UCommonActivatableWidgetStack* GetActiveWidgetStack() const;
+
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "Menu Manager|Config")
@@ -65,8 +67,8 @@ private:
     UPROPERTY()
     TObjectPtr<US_MainMenuScreen> MainMenuScreenInstance;
 
-    // This internal handler is called by US_ConfirmDialogWidget
-    void HandleConfirmDialogClosedInternal(bool bConfirmed);
+    UFUNCTION() // Ensure this is a UFUNCTION for AddDynamic
+        void HandleConfirmDialogClosedInternal(bool bConfirmed);
 
     bool bIsMenuOpen;
 };
