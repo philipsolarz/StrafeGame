@@ -3,183 +3,184 @@
 #include "GameFramework/PlayerController.h"
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
-#include "CommonUserWidget.h"
-#include "Widgets/CommonActivatableWidgetContainer.h"
 #include "UI/MainMenu/Screens/S_MainMenuScreen.h"
 #include "UI/MainMenu/Widgets/S_ConfirmDialogWidget.h"
 #include "UI/MainMenu/MenuScreenInterface.h"
 #include "EnhancedInputSubsystems.h"
-#include "EnhancedInputComponent.h"
+#include "EnhancedInputComponent.h" // May not be needed here directly
+#include "InputMappingContext.h"    // For UInputMappingContext
 #include "Engine/LocalPlayer.h"
 #include "Kismet/GameplayStatics.h"
+#include "Widgets/CommonActivatableWidgetContainer.h" // For UCommonActivatableWidgetStack
 
 void UMenuManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
-    bIsMenuOpen = false;
-
-    if (GetGameInstance())
-    {
-        // Ensure ActiveWidgetStack is created correctly if it's meant to be a UCommonActivatableWidgetStack
-        // If MainMenuScreenInstance is supposed to *contain* this stack, this logic might need adjustment
-        // For now, assuming an independent stack managed by the subsystem.
-        ActiveWidgetStack = NewObject<UCommonActivatableWidgetStack>(GetGameInstance(), TEXT("ActiveWidgetStack"));
-    }
+    // ActiveWidgetStack is removed, as S_MainMenuScreen will manage its own.
     UE_LOG(LogTemp, Log, TEXT("UMenuManagerSubsystem Initialized."));
 }
 
 void UMenuManagerSubsystem::Deinitialize()
 {
-    ActiveWidgetStack = nullptr;
     MainMenuScreenInstance = nullptr;
+    ActiveConfirmDialog = nullptr;
     Super::Deinitialize();
 }
 
-void UMenuManagerSubsystem::ToggleMainMenu()
+APlayerController* UMenuManagerSubsystem::GetLocalPlayerController() const
 {
-    APlayerController* PC = GetGameInstance()->GetFirstLocalPlayerController();
-    if (!PC) return;
-
-    if (bIsMenuOpen)
+    // This is a simple way; for multiplayer or split-screen, you'd need a more robust way
+    // or pass the controller context around.
+    if (GetGameInstance())
     {
-        if (ActiveWidgetStack)
+        return GetGameInstance()->GetFirstLocalPlayerController();
+    }
+    return nullptr;
+}
+
+void UMenuManagerSubsystem::ShowInitialMenu(APlayerController* ForPlayerController)
+{
+    if (!ForPlayerController)
+    {
+        UE_LOG(LogTemp, Error, TEXT("UMenuManagerSubsystem::ShowInitialMenu - ForPlayerController is null!"));
+        return;
+    }
+
+    if (MainMenuScreenInstance && MainMenuScreenInstance->GetOwningPlayer() == ForPlayerController && MainMenuScreenInstance->IsActivated())
+    {
+        UE_LOG(LogTemp, Log, TEXT("UMenuManagerSubsystem::ShowInitialMenu - Main menu already active for this player."));
+        return;
+    }
+
+    if (MainMenuScreenClass.IsNull())
+    {
+        UE_LOG(LogTemp, Error, TEXT("MainMenuScreenClass not set in MenuManagerSubsystem!"));
+        return;
+    }
+
+    TSubclassOf<US_MainMenuScreen> LoadedMainMenuClass = MainMenuScreenClass.LoadSynchronous();
+    if (!LoadedMainMenuClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to load MainMenuScreenClass!"));
+        return;
+    }
+
+    // Destroy old instance if it exists (e.g., from a different player or a previous session error)
+    if (MainMenuScreenInstance)
+    {
+        MainMenuScreenInstance->RemoveFromParent(); // Ensure it's removed from viewport
+        MainMenuScreenInstance->MarkAsGarbage();    // Let GC handle it
+        MainMenuScreenInstance = nullptr;
+    }
+
+    MainMenuScreenInstance = CreateWidget<US_MainMenuScreen>(ForPlayerController, LoadedMainMenuClass);
+
+    if (MainMenuScreenInstance)
+    {
+        if (MainMenuScreenInstance->GetClass()->ImplementsInterface(UMenuScreenInterface::StaticClass()))
         {
-            UCommonActivatableWidget* CurrentActiveSubScreen = ActiveWidgetStack->GetActiveWidget();
-            while (CurrentActiveSubScreen)
+            IMenuScreenInterface::Execute_SetMenuManager(MainMenuScreenInstance, this);
+        }
+        MainMenuScreenInstance->ActivateWidget(); // This adds to viewport and sets up for Common UI
+        UE_LOG(LogTemp, Log, TEXT("Main Menu Screen Activated."));
+
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(ForPlayerController->GetLocalPlayer()))
+        {
+            if (MenuInputMappingContext.IsValid())
             {
-                CurrentActiveSubScreen->DeactivateWidget();
-                CurrentActiveSubScreen = ActiveWidgetStack->GetActiveWidget();
+                Subsystem->AddMappingContext(MenuInputMappingContext.LoadSynchronous(), 1); // Higher priority for menu
+                UE_LOG(LogTemp, Log, TEXT("Applied Menu Input Mapping Context."));
             }
         }
-        if (MainMenuScreenInstance && MainMenuScreenInstance->IsActivated())
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("Failed to create MainMenuScreenInstance."));
+    }
+}
+
+void UMenuManagerSubsystem::CloseMainMenu(APlayerController* ForPlayerController)
+{
+    if (!ForPlayerController) return;
+
+    if (MainMenuScreenInstance && MainMenuScreenInstance->GetOwningPlayer() == ForPlayerController && MainMenuScreenInstance->IsActivated())
+    {
+        // Close all sub-screens first
+        if (UCommonActivatableWidgetStack* Stack = MainMenuScreenInstance->GetPrimaryWidgetStack())
         {
-            MainMenuScreenInstance->DeactivateWidget();
+            while (Stack->GetActiveWidget())
+            {
+                Stack->GetActiveWidget()->DeactivateWidget();
+            }
         }
+        MainMenuScreenInstance->DeactivateWidget(); // Deactivates and removes from viewport
+        // MainMenuScreenInstance = nullptr; // Don't null out immediately if you might re-show it quickly. Deinitialize will handle it.
 
-        bIsMenuOpen = false;
-        PC->SetInputMode(FInputModeGameOnly());
-        PC->SetShowMouseCursor(false);
+        UE_LOG(LogTemp, Log, TEXT("Main Menu Screen Deactivated."));
 
-        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
+        if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(ForPlayerController->GetLocalPlayer()))
         {
             if (MenuInputMappingContext.IsValid())
             {
                 Subsystem->RemoveMappingContext(MenuInputMappingContext.LoadSynchronous());
+                UE_LOG(LogTemp, Log, TEXT("Removed Menu Input Mapping Context."));
             }
         }
-        UE_LOG(LogTemp, Log, TEXT("Main Menu Closed."));
-    }
-    else
-    {
-        if (MainMenuScreenClass.IsNull())
-        {
-            UE_LOG(LogTemp, Error, TEXT("MainMenuScreenClass not set in MenuManagerSubsystem!"));
-            return;
-        }
-
-        TSubclassOf<US_MainMenuScreen> LoadedMainMenuClass = MainMenuScreenClass.LoadSynchronous();
-        if (!LoadedMainMenuClass)
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to load MainMenuScreenClass!"));
-            return;
-        }
-
-        if (!MainMenuScreenInstance)
-        {
-            MainMenuScreenInstance = CreateWidget<US_MainMenuScreen>(PC, LoadedMainMenuClass);
-        }
-
-        if (MainMenuScreenInstance)
-        {
-            if (MainMenuScreenInstance->GetClass()->ImplementsInterface(UMenuScreenInterface::StaticClass()))
-            {
-                IMenuScreenInterface::Execute_SetMenuManager(MainMenuScreenInstance, this);
-            }
-            MainMenuScreenInstance->ActivateWidget();
-
-            bIsMenuOpen = true;
-            PC->SetInputMode(FInputModeGameAndUI());
-            PC->SetShowMouseCursor(true);
-
-            if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer()))
-            {
-                if (MenuInputMappingContext.IsValid())
-                {
-                    Subsystem->AddMappingContext(MenuInputMappingContext.LoadSynchronous(), 1);
-                }
-            }
-            UE_LOG(LogTemp, Log, TEXT("Main Menu Opened."));
-        }
+        // Note: Input mode (GameOnly/UIOnly) is typically handled by the PlayerController that calls ShowInitialMenu/CloseMainMenu.
     }
 }
 
-UCommonActivatableWidgetStack* UMenuManagerSubsystem::GetActiveWidgetStack() const
-{
-    // If your MainMenuScreenInstance is supposed to *own* the stack for sub-screens,
-    // you might fetch it from there instead.
-    // e.g., if (MainMenuScreenInstance) return MainMenuScreenInstance->GetSubScreenStack();
-    return ActiveWidgetStack;
-}
 
 void UMenuManagerSubsystem::ShowScreen(TSubclassOf<UCommonActivatableWidget> ScreenWidgetClass)
 {
-    if (!ScreenWidgetClass || !ActiveWidgetStack)
+    if (!MainMenuScreenInstance || !MainMenuScreenInstance->IsActivated())
     {
-        UE_LOG(LogTemp, Warning, TEXT("UMenuManagerSubsystem::ShowScreen - ScreenWidgetClass or ActiveWidgetStack is null."));
+        UE_LOG(LogTemp, Warning, TEXT("UMenuManagerSubsystem::ShowScreen - MainMenuScreenInstance is not active. Cannot show sub-screen %s"), *ScreenWidgetClass->GetName());
+        // Optionally, try to show the main menu first if this happens unexpectedly
+        // APlayerController* PC = GetLocalPlayerController();
+        // if (PC) ShowInitialMenu(PC);
+        // if (!MainMenuScreenInstance || !MainMenuScreenInstance->IsActivated()) return; // Re-check
         return;
     }
 
-    APlayerController* PC = GetGameInstance()->GetFirstLocalPlayerController();
-    if (!PC) return;
-
-    if (!bIsMenuOpen)
+    if (ScreenWidgetClass)
     {
-        ToggleMainMenu();
-        if (!bIsMenuOpen)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("UMenuManagerSubsystem::ShowScreen - Main menu could not be opened. Aborting showing screen %s"), *ScreenWidgetClass->GetName());
-            return;
-        }
-    }
-
-    // Ensure the ActiveWidgetStack is part of the UI hierarchy if it's not already.
-    // This might involve adding it to the MainMenuScreenInstance if it's designed to host this stack.
-    // For example, if MainMenuScreen has a UOverlaySlot named "SubScreenHostSlot":
-    // if (MainMenuScreenInstance && !ActiveWidgetStack->GetParent()) {
-    // MainMenuScreenInstance->AddChildToOverlay(ActiveWidgetStack, FName("SubScreenHostSlot")); // Custom function hypothetical
-    // }
-
-
-    UCommonActivatableWidget* NewScreen = ActiveWidgetStack->AddWidget(ScreenWidgetClass);
-    if (NewScreen)
-    {
-        if (NewScreen->GetClass()->ImplementsInterface(UMenuScreenInterface::StaticClass()))
-        {
-            IMenuScreenInterface::Execute_SetMenuManager(NewScreen, this);
-        }
-        UE_LOG(LogTemp, Log, TEXT("Showing screen: %s"), *ScreenWidgetClass->GetName());
+        MainMenuScreenInstance->PushScreenToStack(ScreenWidgetClass);
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("UMenuManagerSubsystem::ShowScreen - Failed to AddWidget %s to ActiveWidgetStack"), *ScreenWidgetClass->GetName());
+        UE_LOG(LogTemp, Error, TEXT("UMenuManagerSubsystem::ShowScreen - ScreenWidgetClass is null."));
     }
 }
 
 void UMenuManagerSubsystem::CloseTopmostScreen()
 {
-    if (ActiveWidgetStack && ActiveWidgetStack->GetActiveWidget())
+    if (MainMenuScreenInstance && MainMenuScreenInstance->IsActivated())
     {
-        ActiveWidgetStack->GetActiveWidget()->DeactivateWidget();
-        UE_LOG(LogTemp, Log, TEXT("Closing topmost screen by deactivating."));
+        UCommonActivatableWidgetStack* Stack = MainMenuScreenInstance->GetPrimaryWidgetStack();
+        if (Stack && Stack->GetActiveWidget())
+        {
+            MainMenuScreenInstance->PopScreenFromStack();
+        }
+        // If no sub-screen is active on the stack, we are at the main menu screen.
+        // We don't close the MainMenuScreenInstance itself here, as it's always supposed to be shown.
+        // To exit the main menu level, that would be a different flow (e.g., joining a game).
     }
-    else if (bIsMenuOpen && MainMenuScreenInstance && MainMenuScreenInstance->IsActivated())
+    else
     {
-        ToggleMainMenu();
+        UE_LOG(LogTemp, Warning, TEXT("UMenuManagerSubsystem::CloseTopmostScreen - MainMenuScreenInstance not active."));
     }
 }
 
 void UMenuManagerSubsystem::ShowConfirmDialog(const FText& Title, const FText& Message)
 {
+    APlayerController* PC = GetLocalPlayerController();
+    if (!PC)
+    {
+        OnConfirmDialogResultSet.Broadcast(false); // Cannot show without a player context
+        return;
+    }
+
     if (ConfirmDialogClass.IsNull())
     {
         UE_LOG(LogTemp, Error, TEXT("ConfirmDialogClass not set in MenuManagerSubsystem!"));
@@ -195,58 +196,59 @@ void UMenuManagerSubsystem::ShowConfirmDialog(const FText& Title, const FText& M
         return;
     }
 
-    APlayerController* PC = GetGameInstance()->GetFirstLocalPlayerController();
-    if (!PC)
+    // Ensure main menu is active to host the dialog, or handle dialogs globally if needed.
+    if (!MainMenuScreenInstance || !MainMenuScreenInstance->IsActivated())
     {
-        OnConfirmDialogResultSet.Broadcast(false);
-        return;
+        ShowInitialMenu(PC); // Try to show main menu if not already up
+        if (!MainMenuScreenInstance || !MainMenuScreenInstance->IsActivated())
+        {
+            UE_LOG(LogTemp, Error, TEXT("Cannot show confirm dialog, main menu screen is not available."));
+            OnConfirmDialogResultSet.Broadcast(false);
+            return;
+        }
     }
 
-    // Dialogs are typically pushed to a specific layer in Common UI, often managed by a UCommonUILayerRouter.
-    // For simplicity here, we'll add it to our ActiveWidgetStack.
-    // If you have a dedicated Dialogs layer in your Common UI setup, use that instead.
-    if (ActiveWidgetStack)
+    if (ActiveConfirmDialog) // Close previous one if any
     {
-        // Create an instance and then push it.
-        // The AddWidget on the stack that takes a TSubclassOf is preferred.
-        UCommonActivatableWidget* DialogInstance = ActiveWidgetStack->AddWidget(LoadedDialogClass);
-        US_ConfirmDialogWidget* DialogWidget = Cast<US_ConfirmDialogWidget>(DialogInstance);
+        ActiveConfirmDialog->DeactivateWidget();
+        ActiveConfirmDialog = nullptr;
+    }
 
-        if (DialogWidget)
+    ActiveConfirmDialog = CreateWidget<US_ConfirmDialogWidget>(PC, LoadedDialogClass);
+    if (ActiveConfirmDialog)
+    {
+        ActiveConfirmDialog->OnDialogClosedDelegate.Clear(); // Ensure no old bindings
+        ActiveConfirmDialog->OnDialogClosedDelegate.AddDynamic(this, &UMenuManagerSubsystem::HandleConfirmDialogClosedInternal);
+        ActiveConfirmDialog->SetupDialog(Title, Message);
+
+        // Dialogs are typically pushed onto a specific layer.
+        // If your PrimaryWidgetStack on MainMenuScreen is intended for ALL activatable widgets including modals:
+        if (UCommonActivatableWidgetStack* Stack = MainMenuScreenInstance->GetPrimaryWidgetStack())
         {
-            DialogWidget->OnDialogClosedDelegate.Clear();
-            DialogWidget->OnDialogClosedDelegate.AddDynamic(this, &UMenuManagerSubsystem::HandleConfirmDialogClosedInternal);
-            DialogWidget->SetupDialog(Title, Message);
-            // Activation is handled by AddWidget if the stack is configured to activate new widgets.
-            UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Shown and added to ActiveWidgetStack."));
+            Stack->AddWidget(LoadedDialogClass); // This might re-create it. Better to push instance.
+            // For now, let's activate it directly after creating.
+// If your stack doesn't manage dialogs, activate it directly:
+            ActiveConfirmDialog->ActivateWidget(); // This should add it to viewport on a high ZOrder if Common UI is set up for layers.
+            UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Shown."));
         }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("Failed to cast dialog instance to US_ConfirmDialogWidget or AddWidget failed."));
-            OnConfirmDialogResultSet.Broadcast(false);
+        else {
+            ActiveConfirmDialog->ActivateWidget();
+            UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Shown (no stack available on main menu, direct activation)."));
         }
     }
     else
     {
-        // Fallback if no ActiveWidgetStack (though there should be one)
-        US_ConfirmDialogWidget* DialogWidget = CreateWidget<US_ConfirmDialogWidget>(PC, LoadedDialogClass);
-        if (DialogWidget)
-        {
-            DialogWidget->OnDialogClosedDelegate.Clear();
-            DialogWidget->OnDialogClosedDelegate.AddDynamic(this, &UMenuManagerSubsystem::HandleConfirmDialogClosedInternal);
-            DialogWidget->SetupDialog(Title, Message);
-            DialogWidget->ActivateWidget(); // Manually activate if not using a stack
-            UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Shown (fallback activation)."));
-        }
-        else
-        {
-            OnConfirmDialogResultSet.Broadcast(false);
-        }
+        UE_LOG(LogTemp, Error, TEXT("Failed to create ConfirmDialogWidget instance."));
+        OnConfirmDialogResultSet.Broadcast(false);
     }
 }
 
 void UMenuManagerSubsystem::HandleConfirmDialogClosedInternal(bool bConfirmed)
 {
     OnConfirmDialogResultSet.Broadcast(bConfirmed);
+    if (ActiveConfirmDialog) // The dialog would call DeactivateWidget on itself.
+    {
+        ActiveConfirmDialog = nullptr;
+    }
     UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Closed. Confirmed: %d"), bConfirmed);
 }

@@ -7,8 +7,7 @@
 #include "S_MainMenuPlayerController.generated.h"
 
 /**
- * 
- */
+ * */
 UCLASS()
 class STRAFEGAME_API AS_MainMenuPlayerController : public APlayerController
 {
