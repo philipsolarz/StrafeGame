@@ -1,5 +1,7 @@
+// Source/StrafeGame/Private/Weapons/S_WeaponDataAsset.cpp
 #include "Weapons/S_WeaponDataAsset.h"
 #include "Weapons/S_Weapon.h" 
+#include "UI/ViewModels/S_WeaponViewModel.h" // Include base ViewModel
 
 US_WeaponDataAsset::US_WeaponDataAsset()
 {
@@ -7,8 +9,9 @@ US_WeaponDataAsset::US_WeaponDataAsset()
     EquipTime = 0.5f;
     UnequipTime = 0.5f;
     AttachmentSocketName = FName("WeaponSocket");
-    MuzzleFlashSocketName = FName("MuzzleFlashSocket"); // ADDED Default
-    MaxAimTraceRange = 10000.0f; // ADDED Default
+    MuzzleFlashSocketName = FName("MuzzleFlashSocket");
+    MaxAimTraceRange = 10000.0f;
+    WeaponViewModelClass = US_WeaponViewModel::StaticClass(); // Default to base ViewModel
 }
 
 #if WITH_EDITOR
