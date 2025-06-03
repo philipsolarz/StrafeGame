@@ -4,16 +4,15 @@
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
 #include "Interfaces/OnlineSessionInterface.h"
-#include "Components/ComboBoxString.h" // For ESelectInfo::Type
+#include "Components/ComboBoxString.h" 
 #include "UI/MainMenu/MenuScreenInterface.h"
 #include "S_CreateGameScreen.generated.h"
 
 class UCommonButtonBase;
 class UEditableTextBox;
-//class UComboBoxString; // Already included
 class UCheckBox;
 class USpinBox;
-class UMenuManagerSubsystem;
+class AS_MainMenuPlayerController; // Changed from UMenuManagerSubsystem
 
 UCLASS()
 class STRAFEGAME_API US_CreateGameScreen : public UCommonActivatableWidget, public IMenuScreenInterface
@@ -25,7 +24,7 @@ public:
     virtual void NativeConstruct() override;
 
     // IMenuScreenInterface
-    virtual void SetMenuManager_Implementation(UMenuManagerSubsystem* InMenuManager) override;
+    virtual void SetMainMenuPlayerController_Implementation(AS_MainMenuPlayerController* InPlayerController) override; // Updated
 
 protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
@@ -60,7 +59,6 @@ protected:
 
     bool ValidateSettings() const;
 
-    // Online Session
     void CreateGameSession();
     void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
     FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;
@@ -68,14 +66,10 @@ protected:
 
 private:
     UPROPERTY()
-    TObjectPtr<UMenuManagerSubsystem> MenuManager;
+    TWeakObjectPtr<AS_MainMenuPlayerController> OwningMainMenuPlayerController; // Changed type
 
     void PopulateGameModes();
-
-    // New function with correct signature for delegate binding
     UFUNCTION()
     void OnGameModeSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
-
-    // Original logic function
     void PopulateMapsForGameMode(const FString& GameMode);
 };

@@ -3,56 +3,35 @@
 #include "CommonButtonBase.h"
 #include "Components/EditableTextBox.h"
 #include "Components/ListView.h"
-#include "UI/MainMenu/Widgets/S_ServerRowWidget.h"
-#include "UI/MainMenu/MenuManagerSubsystem.h"
+#include "UI/MainMenu/Widgets/S_ServerRowWidget.h" // For US_ServerRowData
+#include "UI/MainMenu/S_MainMenuPlayerController.h" // Changed
 #include "OnlineSubsystem.h"
 #include "OnlineSessionSettings.h"
 #include "Kismet/GameplayStatics.h"
-#include "Engine/LocalPlayer.h" // Required for GetPreferredUniqueNetId()
+#include "Engine/LocalPlayer.h"
 
-// Define for SETTING_MAPNAME if not available
 #ifndef SETTING_MAPNAME
 #define SETTING_MAPNAME FName(TEXT("MAPNAME"))
 #endif
 
-// Define for SEARCH_PRESENCE if not available (common key for presence-based searches)
 #ifndef SEARCH_PRESENCE
 #define SEARCH_PRESENCE FName(TEXT("PRESENCESEARCH"))
 #endif
 
-
-US_FindGameScreen::US_FindGameScreen()
-{
-}
+US_FindGameScreen::US_FindGameScreen() {}
 
 void US_FindGameScreen::NativeConstruct()
 {
     Super::NativeConstruct();
-
-    if (Btn_RefreshList)
-    {
-        Btn_RefreshList->OnClicked().AddUObject(this, &US_FindGameScreen::OnRefreshListClicked);
-    }
+    if (Btn_RefreshList) Btn_RefreshList->OnClicked().AddUObject(this, &US_FindGameScreen::OnRefreshListClicked);
     if (Btn_JoinGame)
     {
         Btn_JoinGame->OnClicked().AddUObject(this, &US_FindGameScreen::OnJoinGameClicked);
         Btn_JoinGame->SetIsEnabled(false);
     }
-    if (Btn_Back)
-    {
-        Btn_Back->OnClicked().AddUObject(this, &US_FindGameScreen::OnBackClicked);
-    }
-    if (Txt_Filter)
-    {
-        Txt_Filter->OnTextChanged.AddDynamic(this, &US_FindGameScreen::OnFilterTextChanged);
-    }
-    if (ServerListView)
-    {
-        // Ensure the ListView is configured in BP to use US_ServerRowData for list item data object
-        // and WBP_ServerRow (derived from US_ServerRowWidget) for entry widget class.
-        ServerListView->OnItemSelectionChanged().AddUObject(this, &US_FindGameScreen::OnServerSelected);
-    }
-
+    if (Btn_Back) Btn_Back->OnClicked().AddUObject(this, &US_FindGameScreen::OnBackClicked);
+    if (Txt_Filter) Txt_Filter->OnTextChanged.AddDynamic(this, &US_FindGameScreen::OnFilterTextChanged);
+    if (ServerListView) ServerListView->OnItemSelectionChanged().AddUObject(this, &US_FindGameScreen::OnServerSelected);
     FindGameSessions();
 }
 
@@ -71,10 +50,9 @@ void US_FindGameScreen::NativeDestruct()
     Super::NativeDestruct();
 }
 
-
-void US_FindGameScreen::SetMenuManager_Implementation(UMenuManagerSubsystem* InMenuManager)
+void US_FindGameScreen::SetMainMenuPlayerController_Implementation(AS_MainMenuPlayerController* InPlayerController)
 {
-    MenuManager = InMenuManager;
+    OwningMainMenuPlayerController = InPlayerController;
 }
 
 void US_FindGameScreen::OnRefreshListClicked()
@@ -90,56 +68,51 @@ void US_FindGameScreen::OnFilterTextChanged(const FText& Text)
     }
 }
 
-
 void US_FindGameScreen::OnJoinGameClicked()
 {
-    if (SelectedSessionResult.IsSet())
+    if (!SelectedSessionResult.IsSet()) return;
+
+    IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
+    if (!OnlineSub) return;
+
+    IOnlineSessionPtr SessionInterface = OnlineSub->GetSessionInterface();
+    if (!SessionInterface.IsValid()) return;
+
+    JoinSessionCompleteDelegate = FOnJoinSessionCompleteDelegate::CreateUObject(this, &US_FindGameScreen::OnJoinSessionComplete);
+    JoinSessionCompleteDelegateHandle = SessionInterface->AddOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate);
+
+    APlayerController* PC = GetOwningPlayer();
+    if (!PC || !PC->GetLocalPlayer())
     {
-        IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
-        if (OnlineSub)
-        {
-            IOnlineSessionPtr SessionInterface = OnlineSub->GetSessionInterface();
-            if (SessionInterface.IsValid())
-            {
-                JoinSessionCompleteDelegate = FOnJoinSessionCompleteDelegate::CreateUObject(this, &US_FindGameScreen::OnJoinSessionComplete);
-                JoinSessionCompleteDelegateHandle = SessionInterface->AddOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate);
+        UE_LOG(LogTemp, Error, TEXT("JoinSession: OwningPlayerController or LocalPlayer is null."));
+        SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
+        return;
+    }
 
-                APlayerController* PC = GetOwningPlayer();
-                if (PC && PC->GetLocalPlayer()) // Check if LocalPlayer is valid
-                {
-                    const FUniqueNetIdRepl LocalPlayerNetId = PC->GetLocalPlayer()->GetPreferredUniqueNetId();
-                    if (!LocalPlayerNetId.IsValid())
-                    {
-                        UE_LOG(LogTemp, Error, TEXT("JoinSession: LocalPlayerNetId is not valid."));
-                        SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
-                        return;
-                    }
+    const FUniqueNetIdRepl LocalPlayerNetId = PC->GetLocalPlayer()->GetPreferredUniqueNetId();
+    if (!LocalPlayerNetId.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("JoinSession: LocalPlayerNetId is not valid."));
+        SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
+        return;
+    }
 
-                    if (!SessionInterface->JoinSession(*LocalPlayerNetId, NAME_GameSession, SelectedSessionResult.GetValue()))
-                    {
-                        SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
-                        UE_LOG(LogTemp, Error, TEXT("Failed to start JoinSession."));
-                    }
-                    else
-                    {
-                        UE_LOG(LogTemp, Log, TEXT("JoinSession call succeeded. Waiting for callback."));
-                    }
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Error, TEXT("JoinSession: OwningPlayerController or LocalPlayer is null."));
-                    SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
-                }
-            }
-        }
+    if (!SessionInterface->JoinSession(*LocalPlayerNetId, NAME_GameSession, SelectedSessionResult.GetValue()))
+    {
+        SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
+        UE_LOG(LogTemp, Error, TEXT("Failed to start JoinSession."));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("JoinSession call succeeded. Waiting for callback."));
     }
 }
 
 void US_FindGameScreen::OnBackClicked()
 {
-    if (MenuManager)
+    if (OwningMainMenuPlayerController.IsValid())
     {
-        MenuManager->CloseTopmostScreen();
+        OwningMainMenuPlayerController->CloseTopmostScreen();
     }
 }
 
@@ -148,36 +121,25 @@ void US_FindGameScreen::OnServerSelected(UObject* Item)
     US_ServerRowData* RowData = Cast<US_ServerRowData>(Item);
     if (RowData && SessionSearch.IsValid())
     {
-        int32 FoundIdx = -1;
-        for (int32 i = 0; i < SessionSearch->SearchResults.Num(); ++i)
+        for (const auto& Result : SessionSearch->SearchResults)
         {
-            const auto& Result = SessionSearch->SearchResults[i];
             FString ServerDisplayName = TEXT("Unnamed Server");
             Result.Session.SessionSettings.Get(FName(TEXT("SESSION_DISPLAY_NAME")), ServerDisplayName);
-
             FString MapNameFromSession;
             Result.Session.SessionSettings.Get(SETTING_MAPNAME, MapNameFromSession);
 
-            // A more reliable way to link RowData to SearchResult would be to store SessionId in RowData
-            // For now, we'll try to match on name and map as a simpler approach.
-            if (ServerDisplayName == RowData->ServerName && MapNameFromSession == RowData->MapName)
+            if (ServerDisplayName == RowData->ServerName && MapNameFromSession == RowData->MapName && Result.PingInMs == RowData->Ping)
             {
-                FoundIdx = i;
-                break;
+                SelectedSessionResult = Result;
+                if (Btn_JoinGame) Btn_JoinGame->SetIsEnabled(true);
+                UE_LOG(LogTemp, Log, TEXT("Server selected: %s"), *SelectedSessionResult.GetValue().Session.OwningUserName);
+                return;
             }
-        }
-
-        if (SessionSearch->SearchResults.IsValidIndex(FoundIdx)) {
-            SelectedSessionResult = SessionSearch->SearchResults[FoundIdx];
-            if (Btn_JoinGame) Btn_JoinGame->SetIsEnabled(true);
-            UE_LOG(LogTemp, Log, TEXT("Server selected: %s"), *SelectedSessionResult.GetValue().Session.OwningUserName);
-            return;
         }
     }
     SelectedSessionResult.Reset();
     if (Btn_JoinGame) Btn_JoinGame->SetIsEnabled(false);
 }
-
 
 void US_FindGameScreen::FindGameSessions()
 {
@@ -186,55 +148,55 @@ void US_FindGameScreen::FindGameSessions()
     SelectedSessionResult.Reset();
     if (Btn_JoinGame) Btn_JoinGame->SetIsEnabled(false);
 
-
     IOnlineSubsystem* OnlineSub = IOnlineSubsystem::Get();
-    if (OnlineSub)
+    if (!OnlineSub)
     {
-        IOnlineSessionPtr SessionInterface = OnlineSub->GetSessionInterface();
-        if (SessionInterface.IsValid())
-        {
-            SessionSearch = MakeShareable(new FOnlineSessionSearch());
-            SessionSearch->MaxSearchResults = 20;
-            SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
-            SessionSearch->bIsLanQuery = false;
+        if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
+        return;
+    }
 
-            FindSessionsCompleteDelegate = FOnFindSessionsCompleteDelegate::CreateUObject(this, &US_FindGameScreen::OnFindSessionsComplete);
-            FindSessionsCompleteDelegateHandle = SessionInterface->AddOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegate);
+    IOnlineSessionPtr SessionInterface = OnlineSub->GetSessionInterface();
+    if (!SessionInterface.IsValid())
+    {
+        if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
+        return;
+    }
 
-            APlayerController* PC = GetOwningPlayer();
-            if (PC && PC->GetLocalPlayer()) // Check if LocalPlayer is valid
-            {
-                const FUniqueNetIdRepl LocalPlayerNetId = PC->GetLocalPlayer()->GetPreferredUniqueNetId();
-                if (!LocalPlayerNetId.IsValid())
-                {
-                    UE_LOG(LogTemp, Error, TEXT("FindSessions: LocalPlayerNetId is not valid."));
-                    SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
-                    if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
-                    return;
-                }
+    SessionSearch = MakeShareable(new FOnlineSessionSearch());
+    SessionSearch->MaxSearchResults = 20;
+    SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
+    SessionSearch->bIsLanQuery = false;
 
-                if (!SessionInterface->FindSessions(*LocalPlayerNetId, SessionSearch.ToSharedRef()))
-                {
-                    SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
-                    UE_LOG(LogTemp, Error, TEXT("Failed to start FindSessions."));
-                    if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
-                }
-                else
-                {
-                    UE_LOG(LogTemp, Log, TEXT("FindSessions call succeeded. Waiting for callback."));
-                }
-            }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("FindSessions: OwningPlayerController or LocalPlayer is null."));
-                SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
-                if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
-            }
-        }
+    FindSessionsCompleteDelegate = FOnFindSessionsCompleteDelegate::CreateUObject(this, &US_FindGameScreen::OnFindSessionsComplete);
+    FindSessionsCompleteDelegateHandle = SessionInterface->AddOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegate);
+
+    APlayerController* PC = GetOwningPlayer();
+    if (!PC || !PC->GetLocalPlayer())
+    {
+        UE_LOG(LogTemp, Error, TEXT("FindSessions: OwningPlayerController or LocalPlayer is null."));
+        SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
+        if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
+        return;
+    }
+
+    const FUniqueNetIdRepl LocalPlayerNetId = PC->GetLocalPlayer()->GetPreferredUniqueNetId();
+    if (!LocalPlayerNetId.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("FindSessions: LocalPlayerNetId is not valid."));
+        SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
+        if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
+        return;
+    }
+
+    if (!SessionInterface->FindSessions(*LocalPlayerNetId, SessionSearch.ToSharedRef()))
+    {
+        SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
+        UE_LOG(LogTemp, Error, TEXT("Failed to start FindSessions."));
+        if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
     }
     else
     {
-        if (Btn_RefreshList) Btn_RefreshList->SetIsEnabled(true);
+        UE_LOG(LogTemp, Log, TEXT("FindSessions call succeeded. Waiting for callback."));
     }
 }
 
@@ -246,10 +208,7 @@ void US_FindGameScreen::OnFindSessionsComplete(bool bWasSuccessful)
     if (OnlineSub)
     {
         IOnlineSessionPtr SessionInterface = OnlineSub->GetSessionInterface();
-        if (SessionInterface.IsValid())
-        {
-            SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
-        }
+        if (SessionInterface.IsValid()) SessionInterface->ClearOnFindSessionsCompleteDelegate_Handle(FindSessionsCompleteDelegateHandle);
     }
 
     if (bWasSuccessful && SessionSearch.IsValid())
@@ -270,18 +229,13 @@ void US_FindGameScreen::PopulateServerList(const TArray<FOnlineSessionSearchResu
 {
     if (!ServerListView) return;
     ServerListView->ClearListItems();
-
     FString FilterString = Txt_Filter ? Txt_Filter->GetText().ToString().ToLower() : TEXT("");
 
     for (const FOnlineSessionSearchResult& Result : SearchResults)
     {
         FString ServerDisplayName = TEXT("Unnamed Server");
         Result.Session.SessionSettings.Get(FName(TEXT("SESSION_DISPLAY_NAME")), ServerDisplayName);
-
-        if (!FilterString.IsEmpty() && !ServerDisplayName.ToLower().Contains(FilterString))
-        {
-            continue;
-        }
+        if (!FilterString.IsEmpty() && !ServerDisplayName.ToLower().Contains(FilterString)) continue;
 
         US_ServerRowData* Item = NewObject<US_ServerRowData>(this);
         if (Item)
@@ -302,10 +256,7 @@ void US_FindGameScreen::OnJoinSessionComplete(FName SessionName, EOnJoinSessionC
     if (OnlineSub)
     {
         IOnlineSessionPtr SessionInterface = OnlineSub->GetSessionInterface();
-        if (SessionInterface.IsValid())
-        {
-            SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
-        }
+        if (SessionInterface.IsValid()) SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegateHandle);
     }
 
     if (Result == EOnJoinSessionCompleteResult::Success)
@@ -318,16 +269,10 @@ void US_FindGameScreen::OnJoinSessionComplete(FName SessionName, EOnJoinSessionC
             if (OnlineSub && OnlineSub->GetSessionInterface().IsValid() && OnlineSub->GetSessionInterface()->GetResolvedConnectString(SessionName, ConnectString))
             {
                 PC->ClientTravel(ConnectString, TRAVEL_Absolute);
-                if (MenuManager) MenuManager->ToggleMainMenu();
+                if (OwningMainMenuPlayerController.IsValid()) OwningMainMenuPlayerController->CloseFullMenu(); // Close menu
             }
-            else
-            {
-                UE_LOG(LogTemp, Error, TEXT("Failed to get connect string after joining session."));
-            }
+            else UE_LOG(LogTemp, Error, TEXT("Failed to get connect string after joining session."));
         }
     }
-    else
-    {
-        UE_LOG(LogTemp, Error, TEXT("Failed to join session. Result: %d"), static_cast<int32>(Result));
-    }
+    else UE_LOG(LogTemp, Error, TEXT("Failed to join session. Result: %d"), static_cast<int32>(Result));
 }

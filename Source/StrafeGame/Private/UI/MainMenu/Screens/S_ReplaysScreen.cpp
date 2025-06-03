@@ -2,13 +2,12 @@
 #include "UI/MainMenu/Screens/S_ReplaysScreen.h"
 #include "CommonButtonBase.h"
 #include "Components/ListView.h"
-#include "UI/MainMenu/MenuManagerSubsystem.h"
+#include "UI/MainMenu/S_MainMenuPlayerController.h" // Changed
 #include "Kismet/GameplayStatics.h"
 
 void US_ReplaysScreen::NativeConstruct()
 {
     Super::NativeConstruct();
-
     if (Btn_PlayReplay)
     {
         Btn_PlayReplay->OnClicked().AddUObject(this, &US_ReplaysScreen::OnPlayReplayClicked);
@@ -19,32 +18,23 @@ void US_ReplaysScreen::NativeConstruct()
         Btn_DeleteReplay->OnClicked().AddUObject(this, &US_ReplaysScreen::OnDeleteReplayClicked);
         Btn_DeleteReplay->SetIsEnabled(false);
     }
-    if (Btn_Back)
-    {
-        Btn_Back->OnClicked().AddUObject(this, &US_ReplaysScreen::OnBackClicked);
-    }
-    if (ReplayListView)
-    {
-        ReplayListView->OnItemSelectionChanged().AddUObject(this, &US_ReplaysScreen::OnReplaySelected);
-    }
-
+    if (Btn_Back) Btn_Back->OnClicked().AddUObject(this, &US_ReplaysScreen::OnBackClicked);
+    if (ReplayListView) ReplayListView->OnItemSelectionChanged().AddUObject(this, &US_ReplaysScreen::OnReplaySelected);
     PopulateReplayList();
 }
 
-void US_ReplaysScreen::SetMenuManager_Implementation(UMenuManagerSubsystem* InMenuManager)
+void US_ReplaysScreen::SetMainMenuPlayerController_Implementation(AS_MainMenuPlayerController* InPlayerController)
 {
-    MenuManager = InMenuManager;
+    OwningMainMenuPlayerController = InPlayerController;
 }
 
 void US_ReplaysScreen::PopulateReplayList()
 {
     if (!ReplayListView) return;
     ReplayListView->ClearListItems();
-
-    // Placeholder data
     for (int32 i = 0; i < 3; ++i)
     {
-        US_ReplayListItemData* Item = NewObject<US_ReplayListItemData>(this); // Ensure 'this' is a valid Outer
+        US_ReplayListItemData* Item = NewObject<US_ReplayListItemData>(this);
         Item->FileName = FString::Printf(TEXT("Replay_%d.replay"), i + 1);
         Item->Timestamp = FDateTime::UtcNow() - FTimespan::FromDays(i);
         Item->Duration = FTimespan::FromMinutes(5 + i * 2);
@@ -66,10 +56,7 @@ void US_ReplaysScreen::OnPlayReplayClicked()
     {
         UE_LOG(LogTemp, Log, TEXT("Attempting to play replay: %s"), *SelectedReplayData->FileName);
         APlayerController* PC = GetOwningPlayer();
-        if (PC)
-        {
-            PC->ConsoleCommand(FString::Printf(TEXT("demoplay %s"), *SelectedReplayData->FileName));
-        }
+        if (PC) PC->ConsoleCommand(FString::Printf(TEXT("demoplay %s"), *SelectedReplayData->FileName));
     }
 }
 
@@ -78,28 +65,24 @@ void US_ReplaysScreen::HandleDeleteReplayConfirmed(bool bConfirmed)
     if (bConfirmed && SelectedReplayData)
     {
         UE_LOG(LogTemp, Log, TEXT("Attempting to delete replay: %s"), *SelectedReplayData->FileName);
-        // TODO: Implement actual replay file deletion logic here
-        // For UI demonstration, we'll just remove it from the list
         if (ReplayListView) ReplayListView->RemoveItem(SelectedReplayData);
         SelectedReplayData = nullptr;
         if (Btn_PlayReplay) Btn_PlayReplay->SetIsEnabled(false);
         if (Btn_DeleteReplay) Btn_DeleteReplay->SetIsEnabled(false);
     }
-    if (MenuManager)
+    if (OwningMainMenuPlayerController.IsValid())
     {
-        MenuManager->OnConfirmDialogResultSet.RemoveDynamic(this, &US_ReplaysScreen::HandleDeleteReplayConfirmed);
+        OwningMainMenuPlayerController->OnConfirmDialogResultSet.RemoveDynamic(this, &US_ReplaysScreen::HandleDeleteReplayConfirmed);
     }
 }
 
-
 void US_ReplaysScreen::OnDeleteReplayClicked()
 {
-    if (SelectedReplayData && MenuManager)
+    if (SelectedReplayData && OwningMainMenuPlayerController.IsValid())
     {
-        MenuManager->OnConfirmDialogResultSet.Clear();
-        MenuManager->OnConfirmDialogResultSet.AddDynamic(this, &US_ReplaysScreen::HandleDeleteReplayConfirmed);
-
-        MenuManager->ShowConfirmDialog(
+        OwningMainMenuPlayerController->OnConfirmDialogResultSet.Clear();
+        OwningMainMenuPlayerController->OnConfirmDialogResultSet.AddDynamic(this, &US_ReplaysScreen::HandleDeleteReplayConfirmed);
+        OwningMainMenuPlayerController->ShowConfirmDialog(
             FText::FromString("Delete Replay"),
             FText::Format(NSLOCTEXT("ReplaysScreen", "DeleteConfirmMsgFmt", "Are you sure you want to delete {0}?"), FText::FromString(SelectedReplayData->FileName))
         );
@@ -108,8 +91,8 @@ void US_ReplaysScreen::OnDeleteReplayClicked()
 
 void US_ReplaysScreen::OnBackClicked()
 {
-    if (MenuManager)
+    if (OwningMainMenuPlayerController.IsValid())
     {
-        MenuManager->CloseTopmostScreen();
+        OwningMainMenuPlayerController->CloseTopmostScreen();
     }
 }

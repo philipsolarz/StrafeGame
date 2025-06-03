@@ -5,7 +5,7 @@
 #include "UObject/Interface.h"
 #include "MenuScreenInterface.generated.h"
 
-class UMenuManagerSubsystem;
+class AS_MainMenuPlayerController; // Forward declaration
 
 UINTERFACE(MinimalAPI, Blueprintable)
 class UMenuScreenInterface : public UInterface
@@ -19,5 +19,5 @@ class STRAFEGAME_API IMenuScreenInterface
 
 public:
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Menu Screen")
-    void SetMenuManager(UMenuManagerSubsystem* InMenuManager);
+    void SetMainMenuPlayerController(AS_MainMenuPlayerController* InPlayerController);
 };
