@@ -4,7 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
 #include "CommonUserWidget.h"
-#include "Widgets/CommonActivatableWidgetContainer.h" // Correct include
+#include "Widgets/CommonActivatableWidgetContainer.h"
 #include "UI/MainMenu/Screens/S_MainMenuScreen.h"
 #include "UI/MainMenu/Widgets/S_ConfirmDialogWidget.h"
 #include "UI/MainMenu/MenuScreenInterface.h"
@@ -20,6 +20,9 @@ void UMenuManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
     if (GetGameInstance())
     {
+        // Ensure ActiveWidgetStack is created correctly if it's meant to be a UCommonActivatableWidgetStack
+        // If MainMenuScreenInstance is supposed to *contain* this stack, this logic might need adjustment
+        // For now, assuming an independent stack managed by the subsystem.
         ActiveWidgetStack = NewObject<UCommonActivatableWidgetStack>(GetGameInstance(), TEXT("ActiveWidgetStack"));
     }
     UE_LOG(LogTemp, Log, TEXT("UMenuManagerSubsystem Initialized."));
@@ -27,7 +30,7 @@ void UMenuManagerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UMenuManagerSubsystem::Deinitialize()
 {
-    ActiveWidgetStack = nullptr; // UObject will be GC'd
+    ActiveWidgetStack = nullptr;
     MainMenuScreenInstance = nullptr;
     Super::Deinitialize();
 }
@@ -39,19 +42,13 @@ void UMenuManagerSubsystem::ToggleMainMenu()
 
     if (bIsMenuOpen)
     {
-        // Deactivate all widgets in the custom stack if main menu is closing
         if (ActiveWidgetStack)
         {
             UCommonActivatableWidget* CurrentActiveSubScreen = ActiveWidgetStack->GetActiveWidget();
             while (CurrentActiveSubScreen)
             {
                 CurrentActiveSubScreen->DeactivateWidget();
-                // Deactivating should pop it from the stack if the stack is configured to do so,
-                // or the UCommonActivatableWidgetStack might need explicit removal if it was manually added.
-                // For now, assuming DeactivateWidget is enough to hide it and allow underlying UI to show.
-                // If widgets need to be fully removed from the container:
-                // ActiveWidgetStack->RemoveWidget(*CurrentActiveSubScreen);
-                CurrentActiveSubScreen = ActiveWidgetStack->GetActiveWidget(); // Check if another became active
+                CurrentActiveSubScreen = ActiveWidgetStack->GetActiveWidget();
             }
         }
         if (MainMenuScreenInstance && MainMenuScreenInstance->IsActivated())
@@ -92,26 +89,13 @@ void UMenuManagerSubsystem::ToggleMainMenu()
             MainMenuScreenInstance = CreateWidget<US_MainMenuScreen>(PC, LoadedMainMenuClass);
         }
 
-        // If the ActiveWidgetStack is meant to be *part* of the MainMenuScreenInstance (e.g., a BindWidget UPROPERTY),
-        // then MainMenuScreenInstance should expose a getter, and this subsystem would use that.
-        // For now, this ActiveWidgetStack is independent and managed by the subsystem,
-        // but it needs to be added to the viewport or a container within MainMenuScreenInstance to be visible.
-        // A common pattern is for MainMenuScreen itself to own the primary UCommonActivatableWidgetStack.
-
         if (MainMenuScreenInstance)
         {
             if (MainMenuScreenInstance->GetClass()->ImplementsInterface(UMenuScreenInterface::StaticClass()))
             {
                 IMenuScreenInterface::Execute_SetMenuManager(MainMenuScreenInstance, this);
             }
-            MainMenuScreenInstance->ActivateWidget(); // This adds to viewport
-
-            // If ActiveWidgetStack is for sub-screens and needs to be part of MainMenuScreen's hierarchy:
-            // This step depends on WBP_MainMenuScreen having a placeholder (e.g. UOverlaySlot) for this stack.
-            // For example: MainMenuScreenInstance->AddSubScreenStack(ActiveWidgetStack); (custom function)
-            // Or, it could be that MainMenuScreenInstance creates ITS OWN stack, and this subsystem
-            // would operate on that stack via an accessor.
-            // For now, the ActiveWidgetStack created here is for screens shown *by* the manager.
+            MainMenuScreenInstance->ActivateWidget();
 
             bIsMenuOpen = true;
             PC->SetInputMode(FInputModeGameAndUI());
@@ -121,7 +105,7 @@ void UMenuManagerSubsystem::ToggleMainMenu()
             {
                 if (MenuInputMappingContext.IsValid())
                 {
-                    Subsystem->AddMappingContext(MenuInputMappingContext.LoadSynchronous(), 1); // Higher priority
+                    Subsystem->AddMappingContext(MenuInputMappingContext.LoadSynchronous(), 1);
                 }
             }
             UE_LOG(LogTemp, Log, TEXT("Main Menu Opened."));
@@ -131,6 +115,9 @@ void UMenuManagerSubsystem::ToggleMainMenu()
 
 UCommonActivatableWidgetStack* UMenuManagerSubsystem::GetActiveWidgetStack() const
 {
+    // If your MainMenuScreenInstance is supposed to *own* the stack for sub-screens,
+    // you might fetch it from there instead.
+    // e.g., if (MainMenuScreenInstance) return MainMenuScreenInstance->GetSubScreenStack();
     return ActiveWidgetStack;
 }
 
@@ -147,7 +134,7 @@ void UMenuManagerSubsystem::ShowScreen(TSubclassOf<UCommonActivatableWidget> Scr
 
     if (!bIsMenuOpen)
     {
-        ToggleMainMenu(); // Ensure main menu (and its potential container for ActiveWidgetStack) is open
+        ToggleMainMenu();
         if (!bIsMenuOpen)
         {
             UE_LOG(LogTemp, Warning, TEXT("UMenuManagerSubsystem::ShowScreen - Main menu could not be opened. Aborting showing screen %s"), *ScreenWidgetClass->GetName());
@@ -155,8 +142,15 @@ void UMenuManagerSubsystem::ShowScreen(TSubclassOf<UCommonActivatableWidget> Scr
         }
     }
 
-    // This adds the widget to the stack and typically activates it.
-    UCommonActivatableWidget* NewScreen = ActiveWidgetStack->AddWidget<UCommonActivatableWidget>(ScreenWidgetClass);
+    // Ensure the ActiveWidgetStack is part of the UI hierarchy if it's not already.
+    // This might involve adding it to the MainMenuScreenInstance if it's designed to host this stack.
+    // For example, if MainMenuScreen has a UOverlaySlot named "SubScreenHostSlot":
+    // if (MainMenuScreenInstance && !ActiveWidgetStack->GetParent()) {
+    // MainMenuScreenInstance->AddChildToOverlay(ActiveWidgetStack, FName("SubScreenHostSlot")); // Custom function hypothetical
+    // }
+
+
+    UCommonActivatableWidget* NewScreen = ActiveWidgetStack->AddWidget(ScreenWidgetClass);
     if (NewScreen)
     {
         if (NewScreen->GetClass()->ImplementsInterface(UMenuScreenInterface::StaticClass()))
@@ -175,12 +169,11 @@ void UMenuManagerSubsystem::CloseTopmostScreen()
 {
     if (ActiveWidgetStack && ActiveWidgetStack->GetActiveWidget())
     {
-        ActiveWidgetStack->GetActiveWidget()->DeactivateWidget(); // Deactivating should pop it if stack is configured correctly
+        ActiveWidgetStack->GetActiveWidget()->DeactivateWidget();
         UE_LOG(LogTemp, Log, TEXT("Closing topmost screen by deactivating."));
     }
     else if (bIsMenuOpen && MainMenuScreenInstance && MainMenuScreenInstance->IsActivated())
     {
-        // If no "sub-screen" is active on our stack, then "close topmost" means close the main menu itself.
         ToggleMainMenu();
     }
 }
@@ -209,36 +202,51 @@ void UMenuManagerSubsystem::ShowConfirmDialog(const FText& Title, const FText& M
         return;
     }
 
-    US_ConfirmDialogWidget* DialogWidget = CreateWidget<US_ConfirmDialogWidget>(PC, LoadedDialogClass);
-    if (DialogWidget)
+    // Dialogs are typically pushed to a specific layer in Common UI, often managed by a UCommonUILayerRouter.
+    // For simplicity here, we'll add it to our ActiveWidgetStack.
+    // If you have a dedicated Dialogs layer in your Common UI setup, use that instead.
+    if (ActiveWidgetStack)
     {
-        DialogWidget->OnDialogClosedDelegate.Clear(); // Clear any previous bindings
-        DialogWidget->OnDialogClosedDelegate.AddDynamic(this, &UMenuManagerSubsystem::HandleConfirmDialogClosedInternal);
-        DialogWidget->SetupDialog(Title, Message);
+        // Create an instance and then push it.
+        // The AddWidget on the stack that takes a TSubclassOf is preferred.
+        UCommonActivatableWidget* DialogInstance = ActiveWidgetStack->AddWidget(LoadedDialogClass);
+        US_ConfirmDialogWidget* DialogWidget = Cast<US_ConfirmDialogWidget>(DialogInstance);
 
-        // Activate the dialog. It should handle its own presentation (e.g., adding to viewport).
-        // CommonUI modal dialogs are often pushed to a specific layer.
-        // If ActiveWidgetStack is the general menu stack:
-        if (ActiveWidgetStack)
+        if (DialogWidget)
         {
-            ActiveWidgetStack->AddWidget(DialogWidget); // This will activate it on top
+            DialogWidget->OnDialogClosedDelegate.Clear();
+            DialogWidget->OnDialogClosedDelegate.AddDynamic(this, &UMenuManagerSubsystem::HandleConfirmDialogClosedInternal);
+            DialogWidget->SetupDialog(Title, Message);
+            // Activation is handled by AddWidget if the stack is configured to activate new widgets.
+            UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Shown and added to ActiveWidgetStack."));
         }
         else
         {
-            DialogWidget->ActivateWidget(); // Fallback if no specific stack
+            UE_LOG(LogTemp, Error, TEXT("Failed to cast dialog instance to US_ConfirmDialogWidget or AddWidget failed."));
+            OnConfirmDialogResultSet.Broadcast(false);
         }
-        UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Shown."));
     }
     else
     {
-        OnConfirmDialogResultSet.Broadcast(false);
+        // Fallback if no ActiveWidgetStack (though there should be one)
+        US_ConfirmDialogWidget* DialogWidget = CreateWidget<US_ConfirmDialogWidget>(PC, LoadedDialogClass);
+        if (DialogWidget)
+        {
+            DialogWidget->OnDialogClosedDelegate.Clear();
+            DialogWidget->OnDialogClosedDelegate.AddDynamic(this, &UMenuManagerSubsystem::HandleConfirmDialogClosedInternal);
+            DialogWidget->SetupDialog(Title, Message);
+            DialogWidget->ActivateWidget(); // Manually activate if not using a stack
+            UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Shown (fallback activation)."));
+        }
+        else
+        {
+            OnConfirmDialogResultSet.Broadcast(false);
+        }
     }
 }
 
-// Now a UFUNCTION
 void UMenuManagerSubsystem::HandleConfirmDialogClosedInternal(bool bConfirmed)
 {
     OnConfirmDialogResultSet.Broadcast(bConfirmed);
     UE_LOG(LogTemp, Log, TEXT("Confirm Dialog Closed. Confirmed: %d"), bConfirmed);
-    // The dialog should remove itself from the stack or viewport upon deactivation.
 }

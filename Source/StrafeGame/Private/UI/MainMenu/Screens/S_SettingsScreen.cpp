@@ -3,9 +3,10 @@
 #include "CommonButtonBase.h"
 #include "CommonTabListWidgetBase.h"
 #include "CommonAnimatedSwitcher.h"
-#include "GameFramework/GameUserSettings.h" // Added include
+#include "GameFramework/GameUserSettings.h"
 #include "UI/MainMenu/MenuManagerSubsystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/GameEngine.h" // Required for GEngine
 
 US_SettingsScreen::US_SettingsScreen()
 {
@@ -16,7 +17,10 @@ void US_SettingsScreen::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    GameSettings = GEngine->GetGameUserSettings(); // Correct way to get GameUserSettings
+    if (GEngine)
+    {
+        GameSettings = GEngine->GetGameUserSettings();
+    }
 
     if (Btn_ApplySettings)
     {
@@ -32,8 +36,8 @@ void US_SettingsScreen::NativeConstruct()
     }
     if (TabList_Settings)
     {
-        // Corrected: Removed extra parentheses from OnTabSelected
-        TabList_Settings->OnTabSelected.AddUObject(this, &US_SettingsScreen::HandleTabSelected);
+        // Corrected: Use OnTabSelected.AddDynamic
+        TabList_Settings->OnTabSelected.AddDynamic(this, &US_SettingsScreen::HandleTabSelected);
     }
 
     SetupTabs();
@@ -56,17 +60,15 @@ void US_SettingsScreen::SetupTabs()
         FName DefaultTabID = TabList_Settings->GetTabIdAtIndex(0);
         if (DefaultTabID != NAME_None)
         {
-            // Check if a tab is already selected, possibly by UMG default
-            if (TabList_Settings->GetSelectedTabID() != DefaultTabID || !Switcher_SettingsTabs->GetActiveWidget())
+            // Corrected method names
+            if (TabList_Settings->GetSelectedTabId() != DefaultTabID || !Switcher_SettingsTabs->GetActiveWidget())
             {
-                TabList_Settings->SetSelectedTabID(DefaultTabID, true); // true to broadcast, CommonUI should handle switcher
-                // HandleTabSelected(DefaultTabID); // No longer needed if SetSelectedTabID broadcasts and switcher is linked
+                // Corrected method name to SelectTabByID
+                TabList_Settings->SelectTabByID(DefaultTabID, true);
             }
-            else if (TabList_Settings->GetSelectedTabID() != NAME_None && Switcher_SettingsTabs->GetActiveWidget() == nullptr)
+            else if (TabList_Settings->GetSelectedTabId() != NAME_None && Switcher_SettingsTabs->GetActiveWidget() == nullptr)
             {
-                // If a tab is selected but switcher has no active widget, force sync.
-                // This case might happen if UMG sets a default selected tab but the switcher linking needs an explicit kick.
-                HandleTabSelected(TabList_Settings->GetSelectedTabID());
+                HandleTabSelected(TabList_Settings->GetSelectedTabId());
             }
         }
     }
@@ -77,7 +79,7 @@ void US_SettingsScreen::LoadSettingsToUI()
 {
     if (!GameSettings) return;
 
-    GameSettings->LoadSettings(); // Load from disk
+    GameSettings->LoadSettings();
 
     // Example for Video Tab (assuming TabContent_Video is a US_SettingsVideoTab with relevant controls)
     // if (US_SettingsVideoTab* VideoTab = Cast<US_SettingsVideoTab>(TabContent_Video))
@@ -102,25 +104,24 @@ void US_SettingsScreen::ApplyUISettingsToGame()
     //     // GameSettings->SetFullscreenMode(NewWindowMode);
     // }
 
-    GameSettings->ApplySettings(false); // false to not apply to system immediately, just update internal state. SaveSettings will apply.
+    GameSettings->ApplySettings(false);
     UE_LOG(LogTemp, Log, TEXT("UI Settings Applied to GameUserSettings."));
 }
 
 void US_SettingsScreen::RevertUISettings()
 {
-    // Reload settings from disk to effectively revert any UI changes not yet applied/saved
     if (GameSettings)
     {
-        GameSettings->LoadSettings(); // Reload from disk
+        GameSettings->LoadSettings();
     }
-    LoadSettingsToUI(); // Then re-populate UI with these reloaded settings
+    LoadSettingsToUI();
     UE_LOG(LogTemp, Log, TEXT("UI Settings Reverted by reloading from disk."));
 }
 
 void US_SettingsScreen::OnApplySettingsClicked()
 {
     ApplyUISettingsToGame();
-    if (GameSettings) GameSettings->SaveSettings(); // This applies and saves to disk
+    if (GameSettings) GameSettings->SaveSettings();
     UE_LOG(LogTemp, Log, TEXT("Settings Applied and Saved to disk."));
 }
 
@@ -131,8 +132,7 @@ void US_SettingsScreen::OnRevertSettingsClicked()
 
 void US_SettingsScreen::OnBackClicked()
 {
-    // Optionally ask for confirmation if there are unsaved changes
-    RevertUISettings(); // Revert any UI changes not applied
+    RevertUISettings();
     if (MenuManager)
     {
         MenuManager->CloseTopmostScreen();
@@ -141,17 +141,8 @@ void US_SettingsScreen::OnBackClicked()
 
 void US_SettingsScreen::HandleTabSelected(FName TabId)
 {
+    // This function is now correctly bound to OnTabSelected
     // CommonUI and UCommonTabListWidgetBase with SetLinkedSwitcher should handle
     // activating the correct widget in the UCommonAnimatedSwitcher.
-    // The TabId is the "Tab ID" property set on the UCommonButton (or similar tab widget)
-    // within the TabList. The Switcher_SettingsTabs must have child widgets whose names
-    // or indices correspond to these Tab IDs for the linking to work automatically.
-
     UE_LOG(LogTemp, Log, TEXT("Settings Tab selected by ID: %s. CommonUI should handle switcher update if linked correctly."), *TabId.ToString());
-
-    // Manual switching as a fallback or for explicit control if needed:
-    // if (!Switcher_SettingsTabs) return;
-    // if (TabContent_Video && TabId == FName(TEXT("VideoTabID"))) Switcher_SettingsTabs->SetActiveWidget(TabContent_Video);
-    // else if (TabContent_Audio && TabId == FName(TEXT("AudioTabID"))) Switcher_SettingsTabs->SetActiveWidget(TabContent_Audio);
-    // ... and so on for other tabs
 }
