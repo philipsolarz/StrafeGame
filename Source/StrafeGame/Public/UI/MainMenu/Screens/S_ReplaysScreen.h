@@ -8,7 +8,7 @@
 
 class UCommonButtonBase;
 class UListView;
-class UMenuManagerSubsystem;
+class AS_MainMenuPlayerController; // Changed
 
 UCLASS(BlueprintType)
 class STRAFEGAME_API US_ReplayListItemData : public UObject
@@ -20,7 +20,6 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "Replay Data") FTimespan Duration;
 };
 
-
 UCLASS()
 class STRAFEGAME_API US_ReplaysScreen : public UCommonActivatableWidget, public IMenuScreenInterface
 {
@@ -28,43 +27,30 @@ class STRAFEGAME_API US_ReplaysScreen : public UCommonActivatableWidget, public 
 
 public:
     virtual void NativeConstruct() override;
-
-    virtual void SetMenuManager_Implementation(UMenuManagerSubsystem* InMenuManager) override;
+    virtual void SetMainMenuPlayerController_Implementation(AS_MainMenuPlayerController* InPlayerController) override; // Updated
 
 protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UListView> ReplayListView;
-
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UCommonButtonBase> Btn_PlayReplay;
-
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UCommonButtonBase> Btn_DeleteReplay;
-
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UCommonButtonBase> Btn_Back;
 
-    UFUNCTION()
-    void OnPlayReplayClicked();
-
-    UFUNCTION()
-    void OnDeleteReplayClicked();
-
-    UFUNCTION()
-    void OnBackClicked();
-
-    UFUNCTION()
-    void OnReplaySelected(UObject* Item);
+    UFUNCTION() void OnPlayReplayClicked();
+    UFUNCTION() void OnDeleteReplayClicked();
+    UFUNCTION() void OnBackClicked();
+    UFUNCTION() void OnReplaySelected(UObject* Item);
 
 private:
     UPROPERTY()
-    TObjectPtr<UMenuManagerSubsystem> MenuManager;
+    TWeakObjectPtr<AS_MainMenuPlayerController> OwningMainMenuPlayerController; // Changed
 
     UPROPERTY()
     TObjectPtr<US_ReplayListItemData> SelectedReplayData;
 
     void PopulateReplayList();
-
-    UFUNCTION() // Made UFUNCTION for AddDynamic
-        void HandleDeleteReplayConfirmed(bool bConfirmed);
+    UFUNCTION() void HandleDeleteReplayConfirmed(bool bConfirmed);
 };

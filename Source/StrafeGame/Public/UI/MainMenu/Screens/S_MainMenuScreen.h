@@ -7,9 +7,9 @@
 #include "S_MainMenuScreen.generated.h"
 
 class UCommonButtonBase;
-class UMenuManagerSubsystem;
-class UCommonActivatableWidgetStack; // Added forward declaration
-class UCommonActivatableWidget;    // Added forward declaration
+class AS_MainMenuPlayerController; // Changed from UMenuManagerSubsystem
+class UCommonActivatableWidgetStack;
+class UCommonActivatableWidget;
 
 UCLASS()
 class STRAFEGAME_API US_MainMenuScreen : public UCommonActivatableWidget, public IMenuScreenInterface
@@ -20,17 +20,14 @@ public:
     virtual void NativeConstruct() override;
 
     // IMenuScreenInterface
-    virtual void SetMenuManager_Implementation(UMenuManagerSubsystem* InMenuManager) override;
+    virtual void SetMainMenuPlayerController_Implementation(AS_MainMenuPlayerController* InPlayerController) override; // Updated
 
-    // Function to push a new screen onto this main menu's stack
     UFUNCTION(BlueprintCallable, Category = "MainMenuScreen")
     void PushScreenToStack(TSubclassOf<UCommonActivatableWidget> ScreenWidgetClass);
 
-    // Function to pop the topmost screen from this main menu's stack
     UFUNCTION(BlueprintCallable, Category = "MainMenuScreen")
     void PopScreenFromStack();
 
-    // Getter for the primary widget stack
     UFUNCTION(BlueprintPure, Category = "MainMenuScreen")
     UCommonActivatableWidgetStack* GetPrimaryWidgetStack() const { return PrimaryWidgetStack; }
 
@@ -50,7 +47,6 @@ protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UCommonButtonBase> Btn_QuitGame;
 
-    // This UPROPERTY must match the name of the UCommonActivatableWidgetStack in your WBP_MainMenuScreen
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
     TObjectPtr<UCommonActivatableWidgetStack> PrimaryWidgetStack;
 
@@ -74,5 +70,5 @@ protected:
 
 private:
     UPROPERTY()
-    TObjectPtr<UMenuManagerSubsystem> MenuManager;
+    TWeakObjectPtr<AS_MainMenuPlayerController> OwningMainMenuPlayerController; // Changed type
 };

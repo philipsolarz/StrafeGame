@@ -4,16 +4,15 @@
 #include "CoreMinimal.h"
 #include "CommonActivatableWidget.h"
 #include "Interfaces/OnlineSessionInterface.h"
-#include "OnlineSessionSettings.h" // Added for FOnlineSessionSearchResult definition
+#include "OnlineSessionSettings.h" 
 #include "UI/MainMenu/MenuScreenInterface.h"
 #include "S_FindGameScreen.generated.h"
 
 class UCommonButtonBase;
 class UEditableTextBox;
-class US_ServerRowData; // Forward declaration for the list item data UObject
+class US_ServerRowData;
 class UListView;
-class UMenuManagerSubsystem;
-// FOnlineSessionSearchResult is now defined via OnlineSessionSettings.h
+class AS_MainMenuPlayerController; // Changed
 
 UCLASS()
 class STRAFEGAME_API US_FindGameScreen : public UCommonActivatableWidget, public IMenuScreenInterface
@@ -26,7 +25,7 @@ public:
     virtual void NativeDestruct() override;
 
     // IMenuScreenInterface
-    virtual void SetMenuManager_Implementation(UMenuManagerSubsystem* InMenuManager) override;
+    virtual void SetMainMenuPlayerController_Implementation(AS_MainMenuPlayerController* InPlayerController) override; // Updated
 
 protected:
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
@@ -46,20 +45,15 @@ protected:
 
     UFUNCTION()
     void OnRefreshListClicked();
-
     UFUNCTION()
     void OnJoinGameClicked();
-
     UFUNCTION()
     void OnBackClicked();
-
     UFUNCTION()
     void OnFilterTextChanged(const FText& Text);
-
     UFUNCTION()
     void OnServerSelected(UObject* Item);
 
-    // Online Session
     void FindGameSessions();
     void OnFindSessionsComplete(bool bWasSuccessful);
     FOnFindSessionsCompleteDelegate FindSessionsCompleteDelegate;
@@ -72,7 +66,7 @@ protected:
 
 private:
     UPROPERTY()
-    TObjectPtr<UMenuManagerSubsystem> MenuManager;
+    TWeakObjectPtr<AS_MainMenuPlayerController> OwningMainMenuPlayerController; // Changed
 
     TOptional<FOnlineSessionSearchResult> SelectedSessionResult;
 
