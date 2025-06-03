@@ -7,9 +7,17 @@
 #include "Components/SpinBox.h"
 #include "UI/MainMenu/MenuManagerSubsystem.h"
 #include "OnlineSubsystem.h"
-#include "OnlineSessionSettings.h" // For FOnlineSessionSettings and SETTING_MAPNAME
+#include "OnlineSessionSettings.h"
 #include "Kismet/GameplayStatics.h"
-#include "GameFramework/GameModeBase.h" // Included for completeness, though not directly used
+#include "GameFramework/GameModeBase.h"
+#include "Engine/GameInstance.h" 
+#include "Engine/LocalPlayer.h" // Required for GetPreferredUniqueNetId()
+
+// Define for SETTING_MAPNAME if not available through includes (usually in OnlineSessionSettings.h or a specific OSS header)
+#ifndef SETTING_MAPNAME
+#define SETTING_MAPNAME FName(TEXT("MAPNAME"))
+#endif
+
 
 US_CreateGameScreen::US_CreateGameScreen()
 {
@@ -32,9 +40,7 @@ void US_CreateGameScreen::NativeConstruct()
 
     if (CBox_GameMode && CBox_GameMode->GetOptionCount() > 0)
     {
-        // Bind to the new intermediate function
         CBox_GameMode->OnSelectionChanged.AddDynamic(this, &US_CreateGameScreen::OnGameModeSelectionChanged);
-        // Initial population based on default selection
         PopulateMapsForGameMode(CBox_GameMode->GetSelectedOption());
     }
 }
@@ -48,18 +54,16 @@ void US_CreateGameScreen::PopulateGameModes()
 {
     if (!CBox_GameMode) return;
     CBox_GameMode->ClearOptions();
-    CBox_GameMode->AddOption(TEXT("Arena")); // These should match the strings used in OnCreateSessionComplete
+    CBox_GameMode->AddOption(TEXT("Arena"));
     CBox_GameMode->AddOption(TEXT("Strafe"));
     if (CBox_GameMode->GetOptionCount() > 0)
     {
-        CBox_GameMode->SetSelectedIndex(0); // Default to first option
+        CBox_GameMode->SetSelectedIndex(0);
     }
 }
 
-// New intermediate function with the correct signature for the delegate
 void US_CreateGameScreen::OnGameModeSelectionChanged(FString SelectedItem, ESelectInfo::Type SelectionType)
 {
-    // Call the original logic function
     PopulateMapsForGameMode(SelectedItem);
 }
 
@@ -68,16 +72,15 @@ void US_CreateGameScreen::PopulateMapsForGameMode(const FString& GameMode)
     if (!CBox_Map) return;
     CBox_Map->ClearOptions();
 
-    // Map names should be exactly as they appear in the content browser (without .umap extension)
     if (GameMode == TEXT("Arena"))
     {
         CBox_Map->AddOption(TEXT("DM-Arena1"));
-        CBox_Map->AddOption(TEXT("DM_AnotherMap")); // Example: Use correct asset names
+        CBox_Map->AddOption(TEXT("DM_AnotherMap"));
     }
     else if (GameMode == TEXT("Strafe"))
     {
         CBox_Map->AddOption(TEXT("STR-MapA"));
-        CBox_Map->AddOption(TEXT("STR_Speedway")); // Example: Use correct asset names
+        CBox_Map->AddOption(TEXT("STR_Speedway"));
     }
 
     if (CBox_Map->GetOptionCount() > 0)
@@ -92,13 +95,11 @@ bool US_CreateGameScreen::ValidateSettings() const
     if (Txt_GameName && Txt_GameName->GetText().IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("Create Game Validation: Game Name is empty."));
-        // Optionally, provide UI feedback here
         return false;
     }
     if (CBox_Map && CBox_Map->GetSelectedOption().IsEmpty())
     {
         UE_LOG(LogTemp, Warning, TEXT("Create Game Validation: No map selected."));
-        // Optionally, provide UI feedback here
         return false;
     }
     return true;
@@ -134,12 +135,19 @@ void US_CreateGameScreen::CreateGameSession()
             SessionSettings.NumPublicConnections = Spin_MaxPlayers ? static_cast<int32>(Spin_MaxPlayers->GetValue()) : 8;
             SessionSettings.bShouldAdvertise = Chk_IsPublic ? Chk_IsPublic->IsChecked() : true;
             SessionSettings.bAllowJoinInProgress = true;
-            SessionSettings.bIsLANMatch = false; // Change to true for LAN games
-            SessionSettings.bUsesPresence = true; // Recommended for advertising through player presence
+            SessionSettings.bIsLANMatch = false;
+            SessionSettings.bUsesPresence = true;
             SessionSettings.bAllowInvites = true;
-            SessionSettings.BuildUniqueId = Get टाइप(); // Helps with version matching
 
-            // Set custom session properties
+            // Set a placeholder BuildUniqueId. In production, this should be a proper build identifier (e.g., changelist number).
+            // FString AppVersion = FApp::GetBuildVersion(); // This gives a string, needs conversion/hashing to int32
+            // For compatibility, use FNetworkVersion::GetNetworkCompatibleChangelist() if available and appropriate,
+            // or a project-specific build ID.
+            // As a simple placeholder for now:
+            SessionSettings.BuildUniqueId = 0;
+            // UE_LOG(LogTemp, Log, TEXT("Using BuildUniqueId: %d (Note: Replace with a proper build versioning system for session compatibility)"), SessionSettings.BuildUniqueId);
+
+
             SessionSettings.Set(FName(TEXT("GAMEMODE_NAME")), CBox_GameMode->GetSelectedOption(), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
             SessionSettings.Set(SETTING_MAPNAME, CBox_Map->GetSelectedOption(), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
             SessionSettings.Set(FName(TEXT("SESSION_DISPLAY_NAME")), Txt_GameName->GetText().ToString(), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
@@ -148,8 +156,6 @@ void US_CreateGameScreen::CreateGameSession()
             if (!Password.IsEmpty())
             {
                 SessionSettings.Set(FName(TEXT("SESSION_PASSWORD_PROTECTED")), true, EOnlineDataAdvertisementType::ViaOnlineService);
-                // The actual password is not typically stored in session settings directly for security.
-                // Password check should be handled by game logic on join attempt.
             }
             else
             {
@@ -163,7 +169,15 @@ void US_CreateGameScreen::CreateGameSession()
             APlayerController* PC = GetOwningPlayer();
             if (PC && PC->GetLocalPlayer())
             {
-                if (!SessionInterface->CreateSession(*PC->GetLocalPlayer()->GetPreferredUniqueNetId(), NAME_GameSession, SessionSettings))
+                const FUniqueNetIdRepl LocalPlayerNetId = PC->GetLocalPlayer()->GetPreferredUniqueNetId();
+                if (!LocalPlayerNetId.IsValid())
+                {
+                    UE_LOG(LogTemp, Error, TEXT("CreateGameSession: LocalPlayerNetId is not valid."));
+                    SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegateHandle);
+                    return;
+                }
+
+                if (!SessionInterface->CreateSession(*LocalPlayerNetId, NAME_GameSession, SessionSettings))
                 {
                     SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegateHandle);
                     UE_LOG(LogTemp, Error, TEXT("Failed to initiate CreateSession call."));
@@ -176,6 +190,7 @@ void US_CreateGameScreen::CreateGameSession()
             else
             {
                 UE_LOG(LogTemp, Error, TEXT("CreateGameSession: OwningPlayerController or LocalPlayer is null."));
+                SessionInterface->ClearOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegateHandle);
             }
         }
         else
@@ -207,18 +222,14 @@ void US_CreateGameScreen::OnCreateSessionComplete(FName SessionName, bool bWasSu
 
         FString SelectedMapName = CBox_Map->GetSelectedOption();
         FString SelectedGameModeName = CBox_GameMode->GetSelectedOption();
-        FString GameModePathOption; // This will be like "?Game=/Game/Blueprints/MyGameMode.MyGameMode_C"
+        FString GameModePathOption;
 
-        // These paths must match your Blueprint GameMode assets if you're using BPs,
-        // or /Script/YourModule.YourC++GameMode if using C++ directly.
         if (SelectedGameModeName == TEXT("Arena"))
         {
-            // Assuming your BP GameMode for Arena is at this path
             GameModePathOption = TEXT("?Game=/Game/GameModes/Arena/BP_S_ArenaGameMode.BP_S_ArenaGameMode_C");
         }
         else if (SelectedGameModeName == TEXT("Strafe"))
         {
-            // Assuming your BP GameMode for Strafe is at this path
             GameModePathOption = TEXT("?Game=/Game/GameModes/Strafe/BP_S_StrafeGameMode.BP_S_StrafeGameMode_C");
         }
 
@@ -228,18 +239,15 @@ void US_CreateGameScreen::OnCreateSessionComplete(FName SessionName, bool bWasSu
             return;
         }
 
-        // Maps are typically located in /Content/Maps/. The URL should be the map name itself if it's in a registered map path.
-        // Or use the full path /Game/Maps/YourMapName
         FString URL = FString::Printf(TEXT("/Game/Maps/%s%s?listen"), *SelectedMapName, *GameModePathOption);
         UE_LOG(LogTemp, Log, TEXT("Attempting to open level with URL: %s"), *URL);
 
-        UGameplayStatics::OpenLevel(GetWorld(), FName(*URL), true); // true for Absolute Travel as host
+        UGameplayStatics::OpenLevel(GetWorld(), FName(*URL), true);
 
-        if (MenuManager) MenuManager->ToggleMainMenu(); // Close menu after starting
+        if (MenuManager) MenuManager->ToggleMainMenu();
     }
     else
     {
         UE_LOG(LogTemp, Error, TEXT("Failed to create session. SessionName: %s"), *SessionName.ToString());
-        // Optionally, inform the player via UI
     }
 }
