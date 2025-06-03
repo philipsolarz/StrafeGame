@@ -73,6 +73,10 @@ void AS_MainMenuPlayerController::ShowInitialMenu()
         {
             IMenuScreenInterface::Execute_SetMainMenuPlayerController(MainMenuScreenInstance, this);
         }
+
+        // ADD THIS LINE - Add to viewport before activating
+        MainMenuScreenInstance->AddToViewport();
+
         MainMenuScreenInstance->ActivateWidget();
         UE_LOG(LogTemp, Log, TEXT("AS_MainMenuPlayerController: Main Menu Screen Activated."));
 
@@ -93,8 +97,9 @@ void AS_MainMenuPlayerController::ShowInitialMenu()
 
 void AS_MainMenuPlayerController::CloseFullMenu()
 {
-    if (MainMenuScreenInstance && MainMenuScreenInstance->GetOwningPlayer() == this && MainMenuScreenInstance->IsActivated())
+    if (MainMenuScreenInstance && MainMenuScreenInstance->GetOwningPlayer() == this)
     {
+        // First deactivate all widgets in the stack
         if (UCommonActivatableWidgetStack* Stack = MainMenuScreenInstance->GetPrimaryWidgetStack())
         {
             while (Stack->GetActiveWidget())
@@ -102,7 +107,16 @@ void AS_MainMenuPlayerController::CloseFullMenu()
                 Stack->GetActiveWidget()->DeactivateWidget();
             }
         }
-        MainMenuScreenInstance->DeactivateWidget();
+
+        // Then deactivate the main menu itself
+        if (MainMenuScreenInstance->IsActivated())
+        {
+            MainMenuScreenInstance->DeactivateWidget();
+        }
+
+        // Remove from viewport
+        MainMenuScreenInstance->RemoveFromParent();
+
         MainMenuScreenInstance = nullptr; // Allow it to be GC'd
 
         UE_LOG(LogTemp, Log, TEXT("AS_MainMenuPlayerController: Main Menu Screen Deactivated and cleared."));
@@ -198,7 +212,10 @@ void AS_MainMenuPlayerController::ShowConfirmDialog(const FText& Title, const FT
         ActiveConfirmDialog->OnDialogClosedDelegate.AddDynamic(this, &AS_MainMenuPlayerController::HandleConfirmDialogClosedInternal);
         ActiveConfirmDialog->SetupDialog(Title, Message);
 
-        ActiveConfirmDialog->ActivateWidget(); // CommonActivatableWidget handles adding to viewport
+        // ADD THIS LINE - Add to viewport with a higher Z-order to ensure it appears on top
+        ActiveConfirmDialog->AddToViewport(10); // 10 is a higher Z-order
+
+        ActiveConfirmDialog->ActivateWidget();
         UE_LOG(LogTemp, Log, TEXT("AS_MainMenuPlayerController: Confirm Dialog Shown."));
     }
     else
