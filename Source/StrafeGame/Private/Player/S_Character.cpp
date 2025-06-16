@@ -25,6 +25,8 @@
 #include "GameplayAbilitySpec.h"
 #include "GameplayTagContainer.h"
 
+#include "S_UI_Subsystem.h"
+#include "Player/S_PlayerController.h"
 
 AS_Character::AS_Character(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer.SetDefaultSubobjectClass<UStrafeMovementComponent>(ACharacter::CharacterMovementComponentName)) // This now uses the StrafeMovementComponent
@@ -157,6 +159,12 @@ void AS_Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
         if (PreviousWeaponAction) EnhancedInputComponent->BindAction(PreviousWeaponAction, ETriggerEvent::Started, this, &AS_Character::Input_PreviousWeapon);
 
         if (ToggleCameraViewAction) EnhancedInputComponent->BindAction(ToggleCameraViewAction, ETriggerEvent::Started, this, &AS_Character::Input_ToggleCameraView);
+
+        // Pause Menu
+        if (TogglePauseMenuAction)
+        {
+            EnhancedInputComponent->BindAction(TogglePauseMenuAction, ETriggerEvent::Started, this, &AS_Character::Input_TogglePauseMenu);
+        }
 
         UE_LOG(LogTemp, Log, TEXT("AS_Character::SetupPlayerInputComponent: %s - Enhanced input bindings complete."), *GetNameSafe(this));
     }
@@ -522,4 +530,34 @@ void AS_Character::HandleDeath()
         DisableInput(PC);
     }
     UE_LOG(LogTemp, Log, TEXT("S_Character %s: HandleDeath executed. Collision and input disabled."), *GetName());
+}
+
+void AS_Character::Input_TogglePauseMenu(const FInputActionValue& Value)
+{
+    UE_LOG(LogTemp, Log, TEXT("1. [S_Character] 'Escape' key pressed, Input_TogglePauseMenu fired."));
+
+    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    {
+        if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+        {
+            UE_LOG(LogTemp, Log, TEXT("2. [S_Character] Found PlayerController and LocalPlayer."));
+            if (US_UI_Subsystem* UISubsystem = LocalPlayer->GetGameInstance()->GetSubsystem<US_UI_Subsystem>())
+            {
+                UE_LOG(LogTemp, Log, TEXT("3. [S_Character] Found UI Subsystem. Calling TogglePauseMenu..."));
+                UISubsystem->TogglePauseMenu();
+            }
+            else
+            {
+                UE_LOG(LogTemp, Error, TEXT("X. [S_Character] FAILED to get UI Subsystem!"));
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("X. [S_Character] FAILED to get LocalPlayer!"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("X. [S_Character] FAILED to get PlayerController!"));
+    }
 }

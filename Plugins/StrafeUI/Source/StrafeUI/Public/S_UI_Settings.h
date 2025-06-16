@@ -18,6 +18,7 @@
 // Forward declarations
 class US_UI_SettingsTabBase;
 class UCommonButtonBase;
+class US_UI_PauseMenuWidget;
 
 /**
  * Defines a game mode and the list of maps compatible with it.
@@ -107,6 +108,10 @@ public:
     TSoftClassPtr<US_UI_SettingsTabBase> PlayerSettingsTabClass;
     //~ End Settings Tab Classes
 
+    /** The widget class to use for the pause menu. */
+    UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Core")
+    TSoftClassPtr<US_UI_PauseMenuWidget> PauseMenuWidgetClass;
+
     //~ Begin Input Settings
     /** Input Action for UI Navigation (e.g., Gamepad D-pad, WASD). */
     UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -119,5 +124,9 @@ public:
     /** Input Action for going back or canceling. */
     UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Input")
     TSoftObjectPtr<UInputAction> BackAction;
+
+    /** Input Action for toggling the pause menu. */
+    UPROPERTY(Config, EditAnywhere, BlueprintReadOnly, Category = "Input")
+    TSoftObjectPtr<UInputAction> TogglePauseMenuAction;
     //~ End Input Settings
 };

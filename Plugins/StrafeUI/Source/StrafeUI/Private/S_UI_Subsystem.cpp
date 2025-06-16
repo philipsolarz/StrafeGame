@@ -12,6 +12,8 @@
 #include "S_UI_OnlineSessionManager.h"
 #include "UI/S_UI_RootWidget.h"
 #include "UI/S_UI_MainMenuWidget.h"
+#include "UI/S_UI_PauseMenuWidget.h"
+#include "Kismet/GameplayStatics.h"
 
 void US_UI_Subsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -143,5 +145,58 @@ void US_UI_Subsystem::RequestModal(const F_UIModalPayload& Payload, const FOnMod
     else
     {
         UE_LOG(LogTemp, Error, TEXT("RequestModal failed: ModalStack is not initialized!"));
+    }
+}
+
+void US_UI_Subsystem::TogglePauseMenu()
+{
+    UE_LOG(LogTemp, Log, TEXT("4. [S_UI_Subsystem] TogglePauseMenu called."));
+
+    if (!InitializingPlayer.IsValid())
+    {
+        UE_LOG(LogTemp, Error, TEXT("X. [S_UI_Subsystem] FAILED: InitializingPlayer is not valid! Was BindPlayer ever called?"));
+        return;
+    }
+
+    if (PauseMenuWidgetInstance && PauseMenuWidgetInstance->IsInViewport())
+    {
+        UE_LOG(LogTemp, Log, TEXT("5. [S_UI_Subsystem] Pause menu is visible, removing it."));
+        PauseMenuWidgetInstance->RemoveFromParent();
+        PauseMenuWidgetInstance = nullptr;
+        UGameplayStatics::SetGamePaused(GetWorld(), false);
+        FInputModeGameOnly InputMode;
+        InitializingPlayer->SetInputMode(InputMode);
+        InitializingPlayer->SetShowMouseCursor(false);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Log, TEXT("5. [S_UI_Subsystem] Pause menu not visible. Attempting to create and show."));
+
+        const US_UI_Settings* Settings = GetDefault<US_UI_Settings>();
+
+        if (!Settings || !Settings->PauseMenuWidgetClass.Get())
+        {
+            UE_LOG(LogTemp, Error, TEXT("X. [S_UI_Subsystem] FAILED: PauseMenuWidgetClass is NOT SET in Project Settings -> Strafe UI!"));
+            return;
+        }
+
+        UE_LOG(LogTemp, Log, TEXT("6. [S_UI_Subsystem] PauseMenuWidgetClass is valid. Creating widget..."));
+
+        PauseMenuWidgetInstance = CreateWidget<US_UI_PauseMenuWidget>(InitializingPlayer.Get(), Settings->PauseMenuWidgetClass.Get());
+
+        if (PauseMenuWidgetInstance)
+        {
+            UE_LOG(LogTemp, Log, TEXT("7. [S_UI_Subsystem] Widget created successfully. Adding to viewport."));
+            PauseMenuWidgetInstance->AddToViewport(10);
+            UGameplayStatics::SetGamePaused(GetWorld(), true);
+            FInputModeUIOnly InputMode;
+            InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+            InitializingPlayer->SetInputMode(InputMode);
+            InitializingPlayer->SetShowMouseCursor(true);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("X. [S_UI_Subsystem] FAILED: CreateWidget returned nullptr!"));
+        }
     }
 }

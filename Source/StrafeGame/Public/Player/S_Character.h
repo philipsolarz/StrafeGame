@@ -26,6 +26,7 @@ class UGameplayAbility;
 class AS_Weapon;
 class US_WeaponPrimaryAbility;
 class US_WeaponSecondaryAbility;
+class UInputAction;
 
 UCLASS(Blueprintable, Config = Game)
 class STRAFEGAME_API AS_Character : public ACharacter
@@ -141,6 +142,10 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Enhanced Input|Actions")
     UInputAction* ToggleCameraViewAction; // Added
 
+    /** Toggles the in-game pause menu */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+    UInputAction* TogglePauseMenuAction;
+
     // Input handler functions
     virtual void Input_Move(const FInputActionValue& InputActionValue);
     virtual void Input_Look(const FInputActionValue& InputActionValue);
@@ -155,6 +160,9 @@ protected:
     virtual void Input_NextWeapon(const FInputActionValue& InputActionValue);
     virtual void Input_PreviousWeapon(const FInputActionValue& InputActionValue);
     virtual void Input_ToggleCameraView(const FInputActionValue& InputActionValue); // Added
+
+    /** Called to toggle the pause menu */
+    void Input_TogglePauseMenu(const FInputActionValue& Value);
 
     // For weapon abilities - these store the InputID for the CURRENTLY EQUIPPED weapon's abilities
     TArray<FGameplayAbilitySpecHandle> CurrentWeaponAbilityHandles; // Server tracks granted handles

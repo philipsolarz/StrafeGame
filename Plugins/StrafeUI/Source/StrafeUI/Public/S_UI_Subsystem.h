@@ -12,6 +12,7 @@ class US_UI_ModalStack;
 class US_UI_RootWidget;
 class AS_UI_PlayerController;
 class US_UI_OnlineSessionManager;
+class US_UI_PauseMenuWidget;
 
 /**
  * The central orchestrator for the StrafeUI plugin.
@@ -48,6 +49,8 @@ public:
     UFUNCTION(BlueprintPure, Category = "UI Subsystem")
     US_UI_OnlineSessionManager* GetSessionManager() const { return SessionManager; }
 
+    /** Toggles the pause menu on or off. */
+    void TogglePauseMenu();
 private:
     /** Finalizes UI setup after all assets have been loaded. */
     void FinalizeUIInitialization();
@@ -79,4 +82,8 @@ private:
     /** A weak pointer to the player controller that is initializing the UI. */
     UPROPERTY()
     TWeakObjectPtr<AS_UI_PlayerController> InitializingPlayer;
+
+    /** The main pause menu widget instance. */
+    UPROPERTY()
+    TObjectPtr<US_UI_PauseMenuWidget> PauseMenuWidgetInstance;
 };

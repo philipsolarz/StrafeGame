@@ -25,7 +25,8 @@ public class StrafeGame : ModuleRules
 			"CommonInput", 
 			"OnlineSubsystem", 
 			"OnlineSubsystemUtils",
-            "StrafeMovement" 
+            "StrafeMovement",
+			"StrafeUI"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
