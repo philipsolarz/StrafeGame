@@ -8,7 +8,26 @@ public class StrafeGame : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GameplayTags", "GameplayAbilities", "GameplayTasks", "Niagara", "UMG", "Slate", "SlateCore", "CommonUI", "OnlineSubsystem", "OnlineSubsystemUtils" });
+		PublicDependencyModuleNames.AddRange(new string[] { 
+			"Core", 
+			"CoreUObject", 
+			"Engine", 
+			"InputCore", 
+			"EnhancedInput", 
+			"GameplayTags", 
+			"GameplayAbilities", 
+			"GameplayTasks", 
+			"Niagara", 
+			"UMG", 
+			"Slate", 
+			"SlateCore", 
+			"CommonUI", 
+			"CommonInput", 
+			"OnlineSubsystem", 
+			"OnlineSubsystemUtils",
+            "StrafeMovement",
+			"StrafeUI"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
