@@ -1,3 +1,5 @@
+// Source/StrafeGame/Public/Player/S_Character.h
+
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #pragma once
@@ -6,25 +8,24 @@
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"     // For Enhanced Input
 #include "GameplayAbilitySpec.h"  // For FGameplayAbilitySpecHandle
-// Note: AbilitySystemInterface.h is removed as ASC is on PlayerState
 #include "S_Character.generated.h"
 
 // Forward Declarations
 class UCameraComponent;
-class USpringArmComponent; // Added
-class USkeletalMeshComponent; // Added
+class USpringArmComponent;
+class USkeletalMeshComponent;
 class US_WeaponInventoryComponent;
-class US_CharacterMovementComponent; // Assuming you'll create this custom version
-class AS_PlayerState; // Forward declare, will be crucial
-class UAbilitySystemComponent; // Standard ASC, as S_Character will get it from PlayerState
-class US_AttributeSet; // Your custom attribute set
+class UStrafeMovementComponent; // Changed to the new movement component
+class AS_PlayerState;
+class UAbilitySystemComponent;
+class US_AttributeSet;
 class UInputMappingContext;
 class UInputAction;
 class UGameplayEffect;
 class UGameplayAbility;
-class AS_Weapon; // Your new base weapon class
-class US_WeaponPrimaryAbility; // Assuming a base class for weapon abilities with InputID
-class US_WeaponSecondaryAbility; // Assuming a base class for weapon abilities with InputID
+class AS_Weapon;
+class US_WeaponPrimaryAbility;
+class US_WeaponSecondaryAbility;
 
 UCLASS(Blueprintable, Config = Game)
 class STRAFEGAME_API AS_Character : public ACharacter
@@ -42,8 +43,8 @@ public:
     //~ Begin APawn Interface
     virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
     virtual void PossessedBy(AController* NewController) override;
-    virtual void OnRep_Controller() override; // Useful for client-side init after controller is set
-    virtual void OnRep_PlayerState() override; // Crucial for client-side GAS init when PlayerState (and its ASC) arrives
+    virtual void OnRep_Controller() override;
+    virtual void OnRep_PlayerState() override;
     //~ End APawn Interface
 
     /** Returns FirstPersonCameraComponent subobject **/
@@ -56,6 +57,10 @@ public:
     FORCEINLINE class USkeletalMeshComponent* GetFP_Mesh() const { return FP_Mesh; }
     /** Returns WeaponInventoryComponent subobject **/
     FORCEINLINE class US_WeaponInventoryComponent* GetWeaponInventoryComponent() const { return WeaponInventoryComponent; }
+
+    /** Returns the StrafeMovementComponent subobject **/
+    UFUNCTION(BlueprintPure, Category = "Character|Movement")
+    UStrafeMovementComponent* GetStrafeMovementComponent() const;
 
     // Helper to get the PlayerState's ASC
     UFUNCTION(BlueprintPure, Category = "Character|Abilities")
@@ -165,8 +170,8 @@ protected:
     virtual void HandleDeath(); // Called by PlayerState when health reaches zero
     friend class AS_PlayerState; // Allow PlayerState to call HandleDeath
 
-    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Character|View") // Changed to VisibleInstanceOnly as it's primarily for local logic
-        bool bIsFirstPersonView;
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Character|View")
+    bool bIsFirstPersonView;
 
     // Sockets for weapon attachment
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Character|WeaponAttachment")
