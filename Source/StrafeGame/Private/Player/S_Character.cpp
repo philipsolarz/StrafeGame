@@ -1,4 +1,5 @@
 // Source/StrafeGame/Private/Player/S_Character.cpp
+
 #include "Player/S_Character.h"
 #include "InputMappingContext.h"
 #include "Player/S_PlayerState.h"
@@ -536,9 +537,9 @@ void AS_Character::Input_TogglePauseMenu(const FInputActionValue& Value)
 {
     UE_LOG(LogTemp, Log, TEXT("1. [S_Character] 'Escape' key pressed, Input_TogglePauseMenu fired."));
 
-    if (APlayerController* PC = Cast<APlayerController>(GetController()))
+    if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
     {
-        if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
+        if (ULocalPlayer* LocalPlayer = PlayerController->GetLocalPlayer())
         {
             UE_LOG(LogTemp, Log, TEXT("2. [S_Character] Found PlayerController and LocalPlayer."));
             if (US_UI_Subsystem* UISubsystem = LocalPlayer->GetGameInstance()->GetSubsystem<US_UI_Subsystem>())

@@ -1,3 +1,5 @@
+// Plugins/StrafeUI/Source/StrafeUI/Private/S_UI_Subsystem.cpp
+
 #include "S_UI_Subsystem.h"
 #include "S_UI_Settings.h"
 #include "GameFramework/PlayerController.h"
@@ -152,9 +154,10 @@ void US_UI_Subsystem::TogglePauseMenu()
 {
     UE_LOG(LogTemp, Log, TEXT("4. [S_UI_Subsystem] TogglePauseMenu called."));
 
-    if (!InitializingPlayer.IsValid())
+    APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+    if (!PC)
     {
-        UE_LOG(LogTemp, Error, TEXT("X. [S_UI_Subsystem] FAILED: InitializingPlayer is not valid! Was BindPlayer ever called?"));
+        UE_LOG(LogTemp, Error, TEXT("X. [S_UI_Subsystem] FAILED: Could not get PlayerController from GetWorld()."));
         return;
     }
 
@@ -165,8 +168,8 @@ void US_UI_Subsystem::TogglePauseMenu()
         PauseMenuWidgetInstance = nullptr;
         UGameplayStatics::SetGamePaused(GetWorld(), false);
         FInputModeGameOnly InputMode;
-        InitializingPlayer->SetInputMode(InputMode);
-        InitializingPlayer->SetShowMouseCursor(false);
+        PC->SetInputMode(InputMode);
+        PC->SetShowMouseCursor(false);
     }
     else
     {
@@ -182,7 +185,7 @@ void US_UI_Subsystem::TogglePauseMenu()
 
         UE_LOG(LogTemp, Log, TEXT("6. [S_UI_Subsystem] PauseMenuWidgetClass is valid. Creating widget..."));
 
-        PauseMenuWidgetInstance = CreateWidget<US_UI_PauseMenuWidget>(InitializingPlayer.Get(), Settings->PauseMenuWidgetClass.Get());
+        PauseMenuWidgetInstance = CreateWidget<US_UI_PauseMenuWidget>(PC, Settings->PauseMenuWidgetClass.Get());
 
         if (PauseMenuWidgetInstance)
         {
@@ -191,8 +194,8 @@ void US_UI_Subsystem::TogglePauseMenu()
             UGameplayStatics::SetGamePaused(GetWorld(), true);
             FInputModeUIOnly InputMode;
             InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-            InitializingPlayer->SetInputMode(InputMode);
-            InitializingPlayer->SetShowMouseCursor(true);
+            PC->SetInputMode(InputMode);
+            PC->SetShowMouseCursor(true);
         }
         else
         {
