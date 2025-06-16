@@ -1,13 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Player/S_PlayerState.h" // Inherit from our base PlayerState
+#include "Player/S_PlayerState.h"
 #include "Delegates/DelegateCombinations.h"
 #include "S_StrafePlayerState.generated.h"
 
-// Struct to hold race time information (can be moved to a more global header if used elsewhere)
 USTRUCT(BlueprintType)
-struct FPlayerStrafeRaceTime // Renamed for clarity and to avoid potential global name collisions
+struct FPlayerStrafeRaceTime
 {
     GENERATED_BODY()
 
@@ -15,15 +14,14 @@ struct FPlayerStrafeRaceTime // Renamed for clarity and to avoid potential globa
     float TotalTime;
 
     UPROPERTY(BlueprintReadOnly, Category = "RaceTime")
-    TArray<float> SplitTimes; // Time at each checkpoint relative to start
+    TArray<float> SplitTimes;
 
-    FPlayerStrafeRaceTime() : TotalTime(-1.0f) {} // Initialize total time to an invalid/unset state
+    FPlayerStrafeRaceTime() : TotalTime(-1.0f) {}
 
     bool IsValid() const { return TotalTime >= 0.0f; }
     void Reset() { TotalTime = -1.0f; SplitTimes.Empty(); }
 };
 
-// Delegates for Strafe race events
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStrafePlayerRaceStateChangedDelegate, AS_StrafePlayerState*, StrafePlayerState);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStrafePlayerNewBestTimeDelegate, const FPlayerStrafeRaceTime&, BestTime);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnStrafePlayerCheckpointHitDelegate, int32, CheckpointIndex, float, TimeAtCheckpoint);
@@ -39,39 +37,31 @@ class STRAFEGAME_API AS_StrafePlayerState : public AS_PlayerState
 public:
     AS_StrafePlayerState();
 
-    //~ Begin AActor Interface
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
     virtual void Tick(float DeltaSeconds) override;
-    //~ End AActor Interface
-
-    //~ Begin APlayerState Interface
     virtual void Reset() override;
     virtual void CopyProperties(APlayerState* PlayerState) override;
-    //~ End APlayerState Interface
 
-    // --- Race Control (Server-Side Logic) ---
-    /** Starts the race timer and state for the player. Called by server (e.g., RaceManager or StartTrigger). */
     UFUNCTION(BlueprintCallable, Category = "StrafePlayerState|Race", meta = (DisplayName = "Start Race (Server)"))
     void ServerStartRace();
 
-    /** Records that the player has reached a checkpoint. Called by server. */
     UFUNCTION(BlueprintCallable, Category = "StrafePlayerState|Race", meta = (DisplayName = "Reached Checkpoint (Server)"))
     void ServerReachedCheckpoint(int32 CheckpointIndex, int32 TotalCheckpointsInRace);
 
-    /** Records that the player has finished the race. Called by server. */
     UFUNCTION(BlueprintCallable, Category = "StrafePlayerState|Race", meta = (DisplayName = "Finished Race (Server)"))
     void ServerFinishedRace(int32 FinalCheckpointIndex, int32 TotalCheckpointsInRace);
 
-    /** Resets the current race state for the player. Called by server. */
     UFUNCTION(BlueprintCallable, Category = "StrafePlayerState|Race", meta = (DisplayName = "Reset Race State (Server)"))
     void ServerResetRaceState();
 
-    // --- State Queries ---
     UFUNCTION(BlueprintPure, Category = "StrafePlayerState|Race")
     float GetCurrentRaceTime() const { return CurrentRaceTime; }
 
     UFUNCTION(BlueprintPure, Category = "StrafePlayerState|Race")
     const TArray<float>& GetCurrentSplitTimes() const { return CurrentSplitTimes; }
+
+    UFUNCTION(BlueprintPure, Category = "StrafePlayerState|Race")
+    const TArray<float>& GetCurrentSplitDeltas() const { return CurrentSplitDeltas; }
 
     UFUNCTION(BlueprintPure, Category = "StrafePlayerState|Race")
     const FPlayerStrafeRaceTime& GetBestRaceTime() const { return BestRaceTime; }
@@ -82,7 +72,6 @@ public:
     UFUNCTION(BlueprintPure, Category = "StrafePlayerState|Race")
     bool IsRaceInProgress() const { return bIsRaceActiveForPlayer; }
 
-    // --- Delegates ---
     UPROPERTY(BlueprintAssignable, Category = "StrafePlayerState|Events")
     FOnStrafePlayerRaceStateChangedDelegate OnStrafePlayerRaceStateChangedDelegate;
 
@@ -105,6 +94,9 @@ protected:
     UPROPERTY(Transient, ReplicatedUsing = OnRep_CurrentSplitTimes)
     TArray<float> CurrentSplitTimes;
 
+    UPROPERTY(Transient, ReplicatedUsing = OnRep_CurrentSplitDeltas)
+    TArray<float> CurrentSplitDeltas;
+
     UPROPERTY(Transient, ReplicatedUsing = OnRep_BestRaceTime)
     FPlayerStrafeRaceTime BestRaceTime;
 
@@ -114,11 +106,12 @@ protected:
     UPROPERTY(Transient, ReplicatedUsing = OnRep_IsRaceActiveForPlayer)
     bool bIsRaceActiveForPlayer;
 
-    // --- OnRep Functions ---
     UFUNCTION()
     void OnRep_CurrentRaceTime();
     UFUNCTION()
     void OnRep_CurrentSplitTimes();
+    UFUNCTION()
+    void OnRep_CurrentSplitDeltas();
     UFUNCTION()
     void OnRep_BestRaceTime();
     UFUNCTION()
@@ -126,6 +119,5 @@ protected:
     UFUNCTION()
     void OnRep_IsRaceActiveForPlayer();
 
-    /** Called internally to broadcast generic state change and manage tick enabling. */
     void BroadcastStrafeStateUpdate();
 };

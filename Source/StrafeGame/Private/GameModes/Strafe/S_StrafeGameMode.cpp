@@ -1,7 +1,7 @@
 // Source/StrafeGame/Private/GameModes/Strafe/S_StrafeGameMode.cpp
 #include "GameModes/Strafe/S_StrafeGameMode.h"
 #include "GameModes/Strafe/S_StrafeGameState.h"
-#include "GameModes/Strafe/S_StrafePlayerState.h" // Specific PlayerState
+#include "GameModes/Strafe/S_StrafePlayerState.h"
 #include "Player/S_PlayerController.h"
 #include "Player/S_Character.h"
 #include "GameModes/Strafe/S_StrafeManager.h" 
@@ -11,23 +11,31 @@
 
 AS_StrafeGameMode::AS_StrafeGameMode()
 {
-    // Set default classes specific to Strafe mode
     PlayerStateClass = AS_StrafePlayerState::StaticClass();
     GameStateClass = AS_StrafeGameState::StaticClass();
-    // DefaultPawnClass and PlayerControllerClass inherited from AS_GameModeBase
-
-    MatchDurationSeconds = 600; // 10 minutes default
+    MatchDurationSeconds = 600;
     WarmupTime = 10.0f;
     PostMatchTime = 15.0f;
-
-    // StrafeManagerClass should be set in Blueprint editor to your BP_S_StrafeManager
     CurrentStrafeManager = nullptr;
+}
+
+void AS_StrafeGameMode::StartPlay()
+{
+    Super::StartPlay();
+
+    // This is the reliable point to find all actors and set up bindings.
+    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode::StartPlay: Spawning and initializing StrafeManager."));
+    SpawnStrafeManager();
+    if (CurrentStrafeManager)
+    {
+        CurrentStrafeManager->RefreshAndInitializeCheckpoints();
+    }
 }
 
 void AS_StrafeGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
     Super::InitGame(MapName, Options, ErrorMessage);
-    SpawnStrafeManager();
+    // Spawning logic moved to StartPlay to ensure all actors are ready.
 }
 
 void AS_StrafeGameMode::InitGameState()
@@ -36,8 +44,8 @@ void AS_StrafeGameMode::InitGameState()
     AS_StrafeGameState* StrafeGS = GetStrafeGameState();
     if (StrafeGS)
     {
-        StrafeGS->SetStrafeManager(CurrentStrafeManager); // Let GameState know about the manager
-        StrafeGS->MatchDurationSeconds = MatchDurationSeconds; // Set replicated duration on GameState
+        StrafeGS->SetStrafeManager(CurrentStrafeManager);
+        StrafeGS->MatchDurationSeconds = MatchDurationSeconds;
     }
 }
 
@@ -49,15 +57,12 @@ void AS_StrafeGameMode::PostLogin(APlayerController* NewPlayer)
     AS_StrafePlayerState* StrafePS = NewPlayer->GetPlayerState<AS_StrafePlayerState>();
     if (StrafePS)
     {
-        // Any specific initialization for StrafePlayerState on login
         if (CurrentStrafeManager)
         {
-            // Ensure player is added to scoreboard/tracking in StrafeManager
             CurrentStrafeManager->UpdatePlayerInScoreboard(StrafePS);
         }
     }
 
-    // If match is in warmup or already started, spawn pawn immediately
     if (IsMatchInProgress() || GetMatchState() == MatchState::WaitingToStart || GetMatchState() == FName(TEXT("Warmup")))
     {
         RestartPlayer(NewPlayer);
@@ -68,13 +73,12 @@ bool AS_StrafeGameMode::PlayerCanRestart(APlayerController* Player)
 {
     if (GetMatchState() == MatchState::InProgress || GetMatchState() == FName(TEXT("Warmup")))
     {
-        return Super::PlayerCanRestart(Player);
+        return true;
     }
     if (GetMatchState() == MatchState::WaitingToStart && WarmupTime <= 0.f)
     {
-        return Super::PlayerCanRestart(Player);
+        return true;
     }
-
     return false;
 }
 
@@ -88,10 +92,7 @@ void AS_StrafeGameMode::HandleMatchIsWaitingToStart()
     Super::HandleMatchIsWaitingToStart();
     UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match is WaitingToStart."));
 
-    if (CurrentStrafeManager)
-    {
-        CurrentStrafeManager->RefreshAndInitializeCheckpoints(); // Corrected
-    }
+    // Checkpoint initialization has been moved to StartPlay for reliability.
 
     if (WarmupTime > 0.f)
     {

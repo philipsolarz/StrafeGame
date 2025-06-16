@@ -1,4 +1,3 @@
-// Source/StrafeGame/Public/UI/ViewModels/S_StrafeHUDViewModel.h
 #pragma once
 
 #include "CoreMinimal.h"
@@ -28,6 +27,9 @@ public:
     TArray<float> CurrentSplitTimes;
 
     UPROPERTY(BlueprintReadOnly, Category = "StrafeViewModel")
+    TArray<float> SplitDeltas; // Added
+
+    UPROPERTY(BlueprintReadOnly, Category = "StrafeViewModel")
     int32 CurrentCheckpoint;
 
     UPROPERTY(BlueprintReadOnly, Category = "StrafeViewModel")
@@ -36,16 +38,13 @@ public:
     UPROPERTY(BlueprintReadOnly, Category = "StrafeViewModel")
     bool bIsRaceActive;
 
-
 protected:
     TWeakObjectPtr<AS_StrafeGameState> StrafeGameState;
     TWeakObjectPtr<AS_StrafePlayerState> LocalStrafePlayerState;
 
-    // FDelegateHandle StrafeRaceStateChangedHandle; // Not needed for AddDynamic
-
     virtual void RefreshGameModeData() override;
     void UpdateStrafeSpecificData();
 
-    UFUNCTION() // Mark as UFUNCTION
-        void HandleStrafeRaceStateChanged(AS_StrafePlayerState* InPlayerState);
+    UFUNCTION()
+    void HandleStrafeRaceStateChanged(AS_StrafePlayerState* InPlayerState);
 };

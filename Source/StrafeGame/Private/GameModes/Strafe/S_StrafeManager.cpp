@@ -7,6 +7,7 @@
 #include "Kismet/GameplayStatics.h" 
 #include "Engine/World.h"           
 
+// (Constructor and GetLifetimeReplicatedProps are unchanged)
 AS_StrafeManager::AS_StrafeManager()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -25,14 +26,11 @@ void AS_StrafeManager::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
     DOREPLIFETIME(AS_StrafeManager, Scoreboard);
 }
 
+
 void AS_StrafeManager::BeginPlay()
 {
     Super::BeginPlay();
-
-    if (HasAuthority())
-    {
-        RefreshAndInitializeCheckpoints();
-    }
+    // Initialization is now kicked off by GameMode::StartPlay to ensure world is ready.
 }
 
 void AS_StrafeManager::RefreshAndInitializeCheckpoints()
@@ -73,7 +71,7 @@ void AS_StrafeManager::RegisterCheckpoint(AS_CheckpointTrigger* Checkpoint)
     {
         AllCheckpointsInOrder.Add(Checkpoint);
         Checkpoint->OnCheckpointReachedDelegate.AddUniqueDynamic(this, &AS_StrafeManager::HandleCheckpointReached);
-        UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager: Registered Checkpoint '%s' (Order: %d, Type: %s)"),
+        UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager: Registered Checkpoint '%s' (Order: %d, Type: %s) and bound delegate."),
             *Checkpoint->GetName(),
             Checkpoint->GetCheckpointOrder(),
             *UEnum::GetValueAsString(Checkpoint->GetCheckpointType())
@@ -164,6 +162,9 @@ void AS_StrafeManager::HandleCheckpointReached(AS_CheckpointTrigger* Checkpoint,
         return;
     }
 
+    // --- DEBUG LOG ---
+    UE_LOG(LogTemp, Warning, TEXT("[STRAFE DEBUG] StrafeManager: Received broadcast for Player '%s' at Checkpoint '%s'."), *PlayerCharacter->GetName(), *Checkpoint->GetName());
+
     AS_StrafePlayerState* StrafePS = PlayerCharacter->GetPlayerState<AS_StrafePlayerState>();
     if (!StrafePS)
     {
@@ -182,22 +183,19 @@ void AS_StrafeManager::HandleCheckpointReached(AS_CheckpointTrigger* Checkpoint,
     {
         if (!StrafePS->IsRaceInProgress())
         {
-            StrafePS->ServerResetRaceState();
             StrafePS->ServerStartRace();
             StrafePS->ServerReachedCheckpoint(CheckpointIdxInSortedList, TotalCheckpointsForFullLap);
         }
         else if (StrafePS->IsRaceInProgress() && StrafePS->GetLastCheckpointReached() == AllCheckpointsInOrder.IndexOfByKey(FinishLine))
         {
-            UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager: Player %s completed a lap and hit Start Line again. Starting new lap."), *StrafePS->GetPlayerName()); // Corrected
-            StrafePS->ServerResetRaceState();
-            StrafePS->ServerStartRace();
+            UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager: Player %s completed a lap and hit Start Line again. Starting new lap."), *StrafePS->GetPlayerName());
+            StrafePS->ServerStartRace(); // This implicitly resets first
             StrafePS->ServerReachedCheckpoint(CheckpointIdxInSortedList, TotalCheckpointsForFullLap);
         }
         else if (StrafePS->IsRaceInProgress())
         {
-            UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager: Player %s hit Start Line mid-race out of sequence. Resetting current run."), *StrafePS->GetPlayerName()); // Corrected
-            StrafePS->ServerResetRaceState();
-            StrafePS->ServerStartRace();
+            UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager: Player %s hit Start Line mid-race out of sequence. Resetting current run."), *StrafePS->GetPlayerName());
+            StrafePS->ServerStartRace(); // This implicitly resets first
             StrafePS->ServerReachedCheckpoint(CheckpointIdxInSortedList, TotalCheckpointsForFullLap);
         }
     }
@@ -214,7 +212,7 @@ void AS_StrafeManager::HandleCheckpointReached(AS_CheckpointTrigger* Checkpoint,
             }
             else {
                 UE_LOG(LogTemp, Warning, TEXT("AS_StrafeManager: Player %s hit Finish Line out of sequence. LastCP: %d, FinishCP Index: %d, Expected Prev: %d"),
-                    *StrafePS->GetPlayerName(), StrafePS->GetLastCheckpointReached(), CheckpointIdxInSortedList, CheckpointIdxInSortedList - 1); // Corrected
+                    *StrafePS->GetPlayerName(), StrafePS->GetLastCheckpointReached(), CheckpointIdxInSortedList, CheckpointIdxInSortedList - 1);
             }
         }
     }
@@ -228,7 +226,7 @@ void AS_StrafeManager::HandleCheckpointReached(AS_CheckpointTrigger* Checkpoint,
             }
             else {
                 UE_LOG(LogTemp, Warning, TEXT("AS_StrafeManager: Player %s hit Intermediate Checkpoint %s out of sequence. LastCP: %d, CP Index: %d, Expected Prev: %d"),
-                    *StrafePS->GetPlayerName(), *Checkpoint->GetName(), StrafePS->GetLastCheckpointReached(), CheckpointIdxInSortedList, CheckpointIdxInSortedList - 1); // Corrected
+                    *StrafePS->GetPlayerName(), *Checkpoint->GetName(), StrafePS->GetLastCheckpointReached(), CheckpointIdxInSortedList, CheckpointIdxInSortedList - 1);
             }
         }
     }
@@ -253,7 +251,7 @@ void AS_StrafeManager::UpdatePlayerInScoreboard(AS_PlayerState* PlayerStateBase)
         if (!Scoreboard[EntryIndex].BestTime.IsValid() || CurrentBestTime.TotalTime < Scoreboard[EntryIndex].BestTime.TotalTime)
         {
             Scoreboard[EntryIndex].BestTime = CurrentBestTime;
-            UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager Scoreboard: Updated best time for %s to %f"), *StrafePS->GetPlayerName(), CurrentBestTime.TotalTime); // Corrected
+            UE_LOG(LogTemp, Log, TEXT("AS_StrafeManager Scoreboard: Updated best time for %s to %f"), *StrafePS->GetPlayerName(), CurrentBestTime.TotalTime);
         }
     }
     else
