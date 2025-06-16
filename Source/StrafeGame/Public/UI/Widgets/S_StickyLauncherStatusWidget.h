@@ -4,7 +4,7 @@
 #include "Blueprint/UserWidget.h"
 #include "S_StickyLauncherStatusWidget.generated.h"
 
-class UTextBlock;
+class UImage; // Forward-declare UImage
 class US_StickyGrenadeLauncherViewModel;
 
 UCLASS()
@@ -23,9 +23,15 @@ protected:
     UPROPERTY(BlueprintReadOnly, Category = "ViewModel")
     TObjectPtr<US_StickyGrenadeLauncherViewModel> StickyLauncherViewModel;
 
-    // Bind in WBP_StickyLauncherStatus
+    // Bind these to the three point images in your UMG Widget
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
-    TObjectPtr<UTextBlock> TxtActiveStickies;
+    TObjectPtr<UImage> Img_Point1;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    TObjectPtr<UImage> Img_Point2;
+
+    UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
+    TObjectPtr<UImage> Img_Point3;
 
     UFUNCTION()
     virtual void HandleViewModelUpdated();

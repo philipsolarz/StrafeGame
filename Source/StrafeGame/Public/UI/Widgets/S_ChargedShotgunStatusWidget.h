@@ -4,7 +4,8 @@
 #include "Blueprint/UserWidget.h"
 #include "S_ChargedShotgunStatusWidget.generated.h"
 
-class UProgressBar;
+class UImage; // Forward-declare UImage
+class UMaterialInstanceDynamic; // Forward-declare the dynamic material class
 class US_ChargedShotgunViewModel;
 
 UCLASS()
@@ -17,21 +18,29 @@ public:
     void SetViewModel(US_ChargedShotgunViewModel* InViewModel);
 
 protected:
-    virtual void NativeConstruct() override;
+    virtual void NativeConstruct() override; // Use NativeConstruct for material setup
     virtual void NativeDestruct() override;
 
     UPROPERTY(BlueprintReadOnly, Category = "ViewModel")
     TObjectPtr<US_ChargedShotgunViewModel> ChargedShotgunViewModel;
 
-    // Bind these in your WBP_ChargedShotgunStatus Blueprint
+    // Bind these in your WBP_ChargedShotgunStatus Blueprint to UImage widgets
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
-    TObjectPtr<UProgressBar> PBPrimaryCharge;
+    TObjectPtr<UImage> Img_PrimaryCharge;
 
     UPROPERTY(BlueprintReadOnly, meta = (BindWidget))
-    TObjectPtr<UProgressBar> PBSecondaryCharge;
+    TObjectPtr<UImage> Img_SecondaryCharge;
 
     UFUNCTION()
     virtual void HandleViewModelUpdated();
 
     virtual void RefreshWidget();
+
+private:
+    // Store dynamic material instances for efficient updates
+    UPROPERTY()
+    TObjectPtr<UMaterialInstanceDynamic> PrimaryChargeMID;
+
+    UPROPERTY()
+    TObjectPtr<UMaterialInstanceDynamic> SecondaryChargeMID;
 };

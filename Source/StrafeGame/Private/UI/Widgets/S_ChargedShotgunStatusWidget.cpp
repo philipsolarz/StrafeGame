@@ -1,6 +1,7 @@
 #include "UI/Widgets/S_ChargedShotgunStatusWidget.h"
 #include "UI/ViewModels/S_ChargedShotgunViewModel.h"
-#include "Components/ProgressBar.h"
+#include "Components/Image.h" // Include UImage for GetDynamicMaterial
+#include "Materials/MaterialInstanceDynamic.h" // Include for UMaterialInstanceDynamic
 
 void US_ChargedShotgunStatusWidget::SetViewModel(US_ChargedShotgunViewModel* InViewModel)
 {
@@ -19,15 +20,30 @@ void US_ChargedShotgunStatusWidget::SetViewModel(US_ChargedShotgunViewModel* InV
     }
     else
     {
-        if (PBPrimaryCharge) PBPrimaryCharge->SetPercent(0.f);
-        if (PBSecondaryCharge) PBSecondaryCharge->SetPercent(0.f);
+        // When the viewmodel is cleared, hide the images
+        if (Img_PrimaryCharge) Img_PrimaryCharge->SetVisibility(ESlateVisibility::Collapsed);
+        if (Img_SecondaryCharge) Img_SecondaryCharge->SetVisibility(ESlateVisibility::Collapsed);
     }
 }
 
 void US_ChargedShotgunStatusWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    if (ChargedShotgunViewModel) // If set in BP for testing or by parent immediately
+
+    // Create Dynamic Material Instances once the widget is constructed.
+    // This ensures we have a unique material instance to modify without affecting the base material.
+    if (Img_PrimaryCharge && !PrimaryChargeMID)
+    {
+        PrimaryChargeMID = Img_PrimaryCharge->GetDynamicMaterial();
+        Img_PrimaryCharge->SetVisibility(ESlateVisibility::Visible);
+    }
+    if (Img_SecondaryCharge && !SecondaryChargeMID)
+    {
+        SecondaryChargeMID = Img_SecondaryCharge->GetDynamicMaterial();
+        Img_SecondaryCharge->SetVisibility(ESlateVisibility::Visible);
+    }
+
+    if (ChargedShotgunViewModel)
     {
         RefreshWidget();
     }
@@ -54,12 +70,13 @@ void US_ChargedShotgunStatusWidget::RefreshWidget()
         return;
     }
 
-    if (PBPrimaryCharge)
+    // Update the scalar parameter on our dynamic material instances
+    if (PrimaryChargeMID)
     {
-        PBPrimaryCharge->SetPercent(ChargedShotgunViewModel->PrimaryChargeProgress);
+        PrimaryChargeMID->SetScalarParameterValue(FName("CircularProgress006"), ChargedShotgunViewModel->PrimaryChargeProgress);
     }
-    if (PBSecondaryCharge)
+    if (SecondaryChargeMID)
     {
-        PBSecondaryCharge->SetPercent(ChargedShotgunViewModel->SecondaryChargeProgress);
+        SecondaryChargeMID->SetScalarParameterValue(FName("CircularProgress006"), ChargedShotgunViewModel->SecondaryChargeProgress);
     }
 }
