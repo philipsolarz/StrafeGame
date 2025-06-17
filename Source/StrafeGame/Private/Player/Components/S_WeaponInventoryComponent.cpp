@@ -1,9 +1,8 @@
-// Source/StrafeGame/Private/Player/Components/S_WeaponInventoryComponent.cpp
 #include "Player/Components/S_WeaponInventoryComponent.h"
 #include "Weapons/S_Weapon.h"
 #include "Weapons/S_WeaponDataAsset.h"
 #include "Player/S_Character.h"
-#include "Player/S_PlayerState.h"      // To get PlayerState for ASC
+#include "Player/S_PlayerState.h"       // To get PlayerState for ASC
 #include "AbilitySystemComponent.h"   // For applying GameplayEffects
 #include "GameplayEffect.h"           // For UGameplayEffect
 #include "Net/UnrealNetwork.h"
@@ -97,16 +96,16 @@ bool US_WeaponInventoryComponent::CacheOwnerReferences()
         }
     }
     if (!OwningCharacter) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::CacheOwnerReferences: OwningCharacter is NULL for %s"), *GetNameSafe(GetOwner()));
-        if (!OwnerAbilitySystemComponent && OwningCharacter) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::CacheOwnerReferences: OwnerAbilitySystemComponent is NULL for %s"), *OwningCharacter->GetName());
-            return OwningCharacter && OwnerAbilitySystemComponent;
+    if (!OwnerAbilitySystemComponent && OwningCharacter) UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::CacheOwnerReferences: OwnerAbilitySystemComponent is NULL for %s"), *OwningCharacter->GetName());
+    return OwningCharacter && OwnerAbilitySystemComponent;
 }
 
 AS_Weapon* US_WeaponInventoryComponent::SpawnWeaponActor(TSubclassOf<AS_Weapon> WeaponClass)
 {
     if (!WeaponClass || GetOwnerRole() != ROLE_Authority || !GetWorld() || !OwningCharacter)
     {
-        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::SpawnWeaponActor: Preconditions not met for spawning %s. WeaponClass Valid: %d, IsServer: %d, World Valid: %d, OwningChar Valid: %d"), 
-             *GetNameSafe(WeaponClass), WeaponClass != nullptr, GetOwnerRole() == ROLE_Authority, GetWorld() != nullptr, OwningCharacter != nullptr);
+        UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::SpawnWeaponActor: Preconditions not met for spawning %s. WeaponClass Valid: %d, IsServer: %d, World Valid: %d, OwningChar Valid: %d"),
+            *GetNameSafe(WeaponClass), WeaponClass != nullptr, GetOwnerRole() == ROLE_Authority, GetWorld() != nullptr, OwningCharacter != nullptr);
         return nullptr;
     }
 
@@ -148,7 +147,7 @@ void US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon(AS_Weapon* WeaponToG
         {
             OwnerAbilitySystemComponent->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
             UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ApplyInitialAmmoForWeapon: Applied InitialAmmoEffect %s for weapon %s on %s"),
-                 *WeaponData->InitialAmmoEffect->GetName(), *WeaponToGrantAmmo->GetName(), *OwningCharacter->GetName());
+                *WeaponData->InitialAmmoEffect->GetName(), *WeaponToGrantAmmo->GetName(), *OwningCharacter->GetName());
         }
         else
         {
@@ -201,6 +200,16 @@ bool US_WeaponInventoryComponent::ServerAddWeapon(TSubclassOf<AS_Weapon> WeaponC
 
         OnWeaponAddedDelegate.Broadcast(WeaponClass);
         UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent::ServerAddWeapon: Added weapon %s to %s's inventory. Total weapons: %d"), *NewWeapon->GetName(), *OwningCharacter->GetName(), WeaponInventory.Num());
+
+        // --- BUG FIX ---
+        // If this is the first weapon being picked up (i.e., nothing is equipped), equip it automatically.
+        if (CurrentWeapon == nullptr)
+        {
+            UE_LOG(LogTemp, Log, TEXT("US_WeaponInventoryComponent: First weapon pickup. Auto-equipping %s"), *NewWeapon->GetName());
+            ServerEquipWeaponByClass(WeaponClass);
+        }
+        // --- END FIX ---
+
         return true;
     }
     UE_LOG(LogTemp, Warning, TEXT("US_WeaponInventoryComponent::ServerAddWeapon: Failed to spawn new weapon %s for %s."), *WeaponClass->GetName(), *OwningCharacter->GetName());

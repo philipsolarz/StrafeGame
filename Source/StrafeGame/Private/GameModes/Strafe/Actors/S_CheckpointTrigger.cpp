@@ -1,8 +1,7 @@
 #include "GameModes/Strafe/Actors/S_CheckpointTrigger.h"
 #include "Components/BoxComponent.h"
 #include "Components/BillboardComponent.h"
-#include "Player/S_Character.h" // For AS_Character
-// #include "GameModes/Strafe/S_StrafeManager.h" // Not directly needed, communicates via delegate
+#include "Player/S_Character.h"
 
 AS_CheckpointTrigger::AS_CheckpointTrigger()
 {
@@ -10,7 +9,16 @@ AS_CheckpointTrigger::AS_CheckpointTrigger()
 
     TriggerVolume = CreateDefaultSubobject<UBoxComponent>(TEXT("TriggerVolume"));
     RootComponent = TriggerVolume;
-    TriggerVolume->SetCollisionProfileName(TEXT("OverlapAllDynamic")); // Ensure it overlaps with Pawns
+
+    // --- COLLISION FIX & VERIFICATION ---
+    // Explicitly set the object type to WorldDynamic and ensure it overlaps Pawns.
+    // This makes the interaction clear and less prone to profile misconfiguration.
+    TriggerVolume->SetCollisionObjectType(ECollisionChannel::ECC_WorldDynamic);
+    TriggerVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+    TriggerVolume->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Ignore);
+    TriggerVolume->SetCollisionResponseToChannel(ECollisionChannel::ECC_Pawn, ECollisionResponse::ECR_Overlap);
+    // --- END FIX ---
+
     TriggerVolume->SetCanEverAffectNavigation(false);
     TriggerVolume->SetGenerateOverlapEvents(true);
 
@@ -18,24 +26,16 @@ AS_CheckpointTrigger::AS_CheckpointTrigger()
     if (EditorBillboard)
     {
         EditorBillboard->SetupAttachment(RootComponent);
-        // Assign a default texture to billboard if desired, or do in Blueprint
     }
 
     CheckpointOrder = 0;
     TypeOfCheckpoint = ECheckpointType::Checkpoint;
-
-    // Checkpoints are part of the level, server will detect overlaps.
-    // No need for bReplicates = true unless clients need to know about their state directly,
-    // but StrafeManager will replicate the sorted list of checkpoints.
-    // For simplicity, let's assume they are static level actors.
-    // If they can be spawned dynamically AND clients need to know about them, set bReplicates = true.
 }
 
 void AS_CheckpointTrigger::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Bind overlap event only on the server
     if (HasAuthority())
     {
         TriggerVolume->OnComponentBeginOverlap.AddDynamic(this, &AS_CheckpointTrigger::OnTriggerOverlap);
@@ -50,15 +50,17 @@ void AS_CheckpointTrigger::OnTriggerOverlap(
     bool bFromSweep,
     const FHitResult& SweepResult)
 {
-    if (HasAuthority()) // Server processes overlaps
+    // --- DEBUG LOG ---
+    // This is the first log that should fire. If you don't see this, the collision is the problem.
+    UE_LOG(LogTemp, Warning, TEXT("[STRAFE DEBUG] OnTriggerOverlap fired for Checkpoint: %s. Overlapped Actor: %s"), *this->GetName(), *OtherActor->GetName());
+    // --- END LOG ---
+
+    if (HasAuthority())
     {
         AS_Character* PlayerCharacter = Cast<AS_Character>(OtherActor);
         if (PlayerCharacter)
         {
-            // UE_LOG(LogTemp, Log, TEXT("AS_CheckpointTrigger '%s' (Order: %d, Type: %s) overlapped by %s."),
-            //     *GetName(), CheckpointOrder, *UEnum::GetValueAsString(TypeOfCheckpoint), *PlayerCharacter->GetName());
-
-            // Broadcast to the StrafeManager (or any other listener)
+            UE_LOG(LogTemp, Warning, TEXT("[STRAFE DEBUG] Checkpoint: Player '%s' detected. Broadcasting to manager."), *PlayerCharacter->GetName());
             OnCheckpointReachedDelegate.Broadcast(this, PlayerCharacter);
         }
     }

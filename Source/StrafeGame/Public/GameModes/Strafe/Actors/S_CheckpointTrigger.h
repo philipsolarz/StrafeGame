@@ -20,7 +20,7 @@ enum class ECheckpointType : uint8
 // Delegate broadcast when a character overlaps this checkpoint
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnSCheckpointReachedDelegate, AS_CheckpointTrigger*, Checkpoint, AS_Character*, PlayerCharacter);
 
-UCLASS(Blueprintable, ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
+UCLASS(Blueprintable, ClassGroup = (Custom))
 class STRAFEGAME_API AS_CheckpointTrigger : public AActor
 {
     GENERATED_BODY()

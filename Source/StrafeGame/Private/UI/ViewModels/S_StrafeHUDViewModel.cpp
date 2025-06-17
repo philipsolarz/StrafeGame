@@ -1,4 +1,3 @@
-// Source/StrafeGame/Private/UI/ViewModels/S_StrafeHUDViewModel.cpp
 #include "UI/ViewModels/S_StrafeHUDViewModel.h"
 #include "Player/S_PlayerController.h"
 #include "GameModes/Strafe/S_StrafeGameState.h"
@@ -17,7 +16,6 @@ void US_StrafeHUDViewModel::Initialize(AS_PlayerController* InOwningPlayerContro
 
         if (LocalStrafePlayerState.IsValid())
         {
-            // Corrected binding
             LocalStrafePlayerState->OnStrafePlayerRaceStateChangedDelegate.AddDynamic(this, &US_StrafeHUDViewModel::HandleStrafeRaceStateChanged);
         }
         RefreshGameModeData();
@@ -28,7 +26,6 @@ void US_StrafeHUDViewModel::Deinitialize()
 {
     if (LocalStrafePlayerState.IsValid())
     {
-        // Corrected unbinding
         LocalStrafePlayerState->OnStrafePlayerRaceStateChangedDelegate.RemoveDynamic(this, &US_StrafeHUDViewModel::HandleStrafeRaceStateChanged);
     }
     StrafeGameState.Reset();
@@ -50,6 +47,7 @@ void US_StrafeHUDViewModel::UpdateStrafeSpecificData()
         CurrentRaceTime = LocalStrafePlayerState->GetCurrentRaceTime();
         BestRaceTime = LocalStrafePlayerState->GetBestRaceTime();
         CurrentSplitTimes = LocalStrafePlayerState->GetCurrentSplitTimes();
+        SplitDeltas = LocalStrafePlayerState->GetCurrentSplitDeltas(); // Added
         CurrentCheckpoint = LocalStrafePlayerState->GetLastCheckpointReached();
         bIsRaceActive = LocalStrafePlayerState->IsRaceInProgress();
     }
@@ -58,6 +56,7 @@ void US_StrafeHUDViewModel::UpdateStrafeSpecificData()
         CurrentRaceTime = 0.0f;
         BestRaceTime.Reset();
         CurrentSplitTimes.Empty();
+        SplitDeltas.Empty(); // Added
         CurrentCheckpoint = -1;
         bIsRaceActive = false;
     }
