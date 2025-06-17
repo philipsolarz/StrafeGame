@@ -9,6 +9,9 @@ void US_StrafeHUDViewModel::Initialize(AS_PlayerController* InOwningPlayerContro
 {
     Super::Initialize(InOwningPlayerController);
 
+    UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::Initialize called for PC: %s"),
+        InOwningPlayerController ? *InOwningPlayerController->GetName() : TEXT("NULL"));
+
     if (GetOwningPlayerController() && GetOwningPlayerController()->GetWorld())
     {
         StrafeGameState = Cast<AS_StrafeGameState>(GameStateBase.Get());
@@ -16,14 +19,50 @@ void US_StrafeHUDViewModel::Initialize(AS_PlayerController* InOwningPlayerContro
 
         if (LocalStrafePlayerState.IsValid())
         {
+            UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::Initialize - Found StrafePlayerState: %s"),
+                *LocalStrafePlayerState->GetName());
+
             LocalStrafePlayerState->OnStrafePlayerRaceStateChangedDelegate.AddDynamic(this, &US_StrafeHUDViewModel::HandleStrafeRaceStateChanged);
+
+            UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::Initialize - Bound to race state change delegate"));
+
+            // Start a timer to update the race time continuously
+            if (UWorld* World = GetOwningPlayerController()->GetWorld())
+            {
+                World->GetTimerManager().SetTimer(UpdateTimerHandle, this, &US_StrafeHUDViewModel::UpdateRaceTime, 0.05f, true);
+            }
         }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("US_StrafeHUDViewModel::Initialize - No StrafePlayerState found!"));
+        }
+
         RefreshGameModeData();
     }
 }
 
+// Add this new function:
+void US_StrafeHUDViewModel::UpdateRaceTime()
+{
+    if (LocalStrafePlayerState.IsValid() && LocalStrafePlayerState->IsRaceInProgress())
+    {
+        float NewTime = LocalStrafePlayerState->GetCurrentRaceTime();
+        if (!FMath::IsNearlyEqual(CurrentRaceTime, NewTime, 0.01f))
+        {
+            CurrentRaceTime = NewTime;
+            OnGameModeViewModelUpdated.Broadcast();
+        }
+    }
+}
+
+// Update Deinitialize to clear the timer:
 void US_StrafeHUDViewModel::Deinitialize()
 {
+    if (GetOwningPlayerController() && GetOwningPlayerController()->GetWorld())
+    {
+        GetOwningPlayerController()->GetWorld()->GetTimerManager().ClearTimer(UpdateTimerHandle);
+    }
+
     if (LocalStrafePlayerState.IsValid())
     {
         LocalStrafePlayerState->OnStrafePlayerRaceStateChangedDelegate.RemoveDynamic(this, &US_StrafeHUDViewModel::HandleStrafeRaceStateChanged);
@@ -33,11 +72,15 @@ void US_StrafeHUDViewModel::Deinitialize()
     Super::Deinitialize();
 }
 
+
 void US_StrafeHUDViewModel::RefreshGameModeData()
 {
     Super::RefreshGameModeData();
     UpdateStrafeSpecificData();
     OnGameModeViewModelUpdated.Broadcast();
+
+    UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::RefreshGameModeData - Broadcasting update. CurrentTime: %.2f, Active: %s"),
+        CurrentRaceTime, bIsRaceActive ? TEXT("YES") : TEXT("NO"));
 }
 
 void US_StrafeHUDViewModel::UpdateStrafeSpecificData()
@@ -47,18 +90,23 @@ void US_StrafeHUDViewModel::UpdateStrafeSpecificData()
         CurrentRaceTime = LocalStrafePlayerState->GetCurrentRaceTime();
         BestRaceTime = LocalStrafePlayerState->GetBestRaceTime();
         CurrentSplitTimes = LocalStrafePlayerState->GetCurrentSplitTimes();
-        SplitDeltas = LocalStrafePlayerState->GetCurrentSplitDeltas(); // Added
+        SplitDeltas = LocalStrafePlayerState->GetCurrentSplitDeltas();
         CurrentCheckpoint = LocalStrafePlayerState->GetLastCheckpointReached();
         bIsRaceActive = LocalStrafePlayerState->IsRaceInProgress();
+
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::UpdateStrafeSpecificData - Time: %.2f, Checkpoint: %d, Active: %s"),
+            CurrentRaceTime, CurrentCheckpoint, bIsRaceActive ? TEXT("YES") : TEXT("NO"));
     }
     else
     {
         CurrentRaceTime = 0.0f;
         BestRaceTime.Reset();
         CurrentSplitTimes.Empty();
-        SplitDeltas.Empty(); // Added
+        SplitDeltas.Empty();
         CurrentCheckpoint = -1;
         bIsRaceActive = false;
+
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::UpdateStrafeSpecificData - No PlayerState, resetting values"));
     }
 
     if (StrafeGameState.IsValid() && StrafeGameState->StrafeManager)
@@ -73,9 +121,14 @@ void US_StrafeHUDViewModel::UpdateStrafeSpecificData()
 
 void US_StrafeHUDViewModel::HandleStrafeRaceStateChanged(AS_StrafePlayerState* InPlayerState)
 {
+    UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::HandleStrafeRaceStateChanged called for PlayerState: %s"),
+        InPlayerState ? *InPlayerState->GetName() : TEXT("NULL"));
+
     if (InPlayerState == LocalStrafePlayerState.Get())
     {
         UpdateStrafeSpecificData();
         OnGameModeViewModelUpdated.Broadcast();
+
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeHUDViewModel::HandleStrafeRaceStateChanged - Updated and broadcast"));
     }
 }

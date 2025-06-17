@@ -41,7 +41,7 @@ struct FPlayerScoreboardEntry_Strafe
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStrafeScoreboardUpdatedDelegate);
 
-UCLASS(Blueprintable, NotPlaceable, Config = Game) // NotPlaceable as it's typically spawned by StrafeGameMode
+UCLASS(Blueprintable, Config = Game) // Removed NotPlaceable to allow placement if needed
 class STRAFEGAME_API AS_StrafeManager : public AActor
 {
     GENERATED_BODY()

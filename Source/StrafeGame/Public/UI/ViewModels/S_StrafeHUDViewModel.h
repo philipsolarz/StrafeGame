@@ -27,7 +27,7 @@ public:
     TArray<float> CurrentSplitTimes;
 
     UPROPERTY(BlueprintReadOnly, Category = "StrafeViewModel")
-    TArray<float> SplitDeltas; // Added
+    TArray<float> SplitDeltas;
 
     UPROPERTY(BlueprintReadOnly, Category = "StrafeViewModel")
     int32 CurrentCheckpoint;
@@ -42,8 +42,11 @@ protected:
     TWeakObjectPtr<AS_StrafeGameState> StrafeGameState;
     TWeakObjectPtr<AS_StrafePlayerState> LocalStrafePlayerState;
 
+    FTimerHandle UpdateTimerHandle;
+
     virtual void RefreshGameModeData() override;
     void UpdateStrafeSpecificData();
+    void UpdateRaceTime();
 
     UFUNCTION()
     void HandleStrafeRaceStateChanged(AS_StrafePlayerState* InPlayerState);

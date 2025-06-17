@@ -17,27 +17,38 @@ AS_StrafeGameMode::AS_StrafeGameMode()
     WarmupTime = 10.0f;
     PostMatchTime = 15.0f;
     CurrentStrafeManager = nullptr;
+
+    // Set default StrafeManager class to ensure it's always available
+    StrafeManagerClass = AS_StrafeManager::StaticClass();
 }
 
 void AS_StrafeGameMode::StartPlay()
 {
     Super::StartPlay();
 
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode::StartPlay: Spawning StrafeManager."));
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode::StartPlay: Beginning StartPlay. StrafeManagerClass is %s"),
+        StrafeManagerClass ? *StrafeManagerClass->GetName() : TEXT("NULL"));
+
     SpawnStrafeManager();
 
     AS_StrafeGameState* StrafeGS = GetStrafeGameState();
     if (CurrentStrafeManager && StrafeGS)
     {
         StrafeGS->SetStrafeManager(CurrentStrafeManager);
-        // FIX: Initialization is moved to HandleMatchIsWaitingToStart to ensure all level actors are ready.
-        // CurrentStrafeManager->RefreshAndInitializeCheckpoints();
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode::StartPlay: StrafeManager set in GameState"));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode::StartPlay: Failed to set StrafeManager in GameState. Manager: %s, GameState: %s"),
+            CurrentStrafeManager ? TEXT("Valid") : TEXT("NULL"),
+            StrafeGS ? TEXT("Valid") : TEXT("NULL"));
     }
 }
 
 void AS_StrafeGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
     Super::InitGame(MapName, Options, ErrorMessage);
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode::InitGame - Map: %s, Options: %s"), *MapName, *Options);
 }
 
 void AS_StrafeGameMode::InitGameState()
@@ -53,15 +64,36 @@ void AS_StrafeGameMode::InitGameState()
 void AS_StrafeGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Player %s logged in."), *NewPlayer->GetName());
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Player %s logged in."), *NewPlayer->GetName());
+
+    // Add PlayerState type verification
+    APlayerState* GenericPS = NewPlayer->GetPlayerState<APlayerState>();
+    if (GenericPS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode::PostLogin - PlayerController has PlayerState: %s of class %s"),
+            *GenericPS->GetName(), *GenericPS->GetClass()->GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode::PostLogin - PlayerController has NO PlayerState!"));
+    }
 
     AS_StrafePlayerState* StrafePS = NewPlayer->GetPlayerState<AS_StrafePlayerState>();
     if (StrafePS)
     {
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode::PostLogin - Successfully cast to AS_StrafePlayerState"));
         if (CurrentStrafeManager)
         {
             CurrentStrafeManager->UpdatePlayerInScoreboard(StrafePS);
         }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode::PostLogin: No StrafeManager available to update scoreboard!"));
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode::PostLogin - FAILED to cast PlayerState to AS_StrafePlayerState!"));
     }
 
     if (IsMatchInProgress() || GetMatchState() == MatchState::WaitingToStart || GetMatchState() == FName(TEXT("Warmup")))
@@ -91,18 +123,37 @@ void AS_StrafeGameMode::Tick(float DeltaSeconds)
 void AS_StrafeGameMode::HandleMatchIsWaitingToStart()
 {
     Super::HandleMatchIsWaitingToStart();
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match is WaitingToStart."));
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Match is WaitingToStart."));
 
-    // FIX: Initialize the checkpoint system here. This is a more reliable point in the lifecycle
-    // as it ensures all actors in the level have been through their BeginPlay calls.
+    // Initialize the checkpoint system here
     if (CurrentStrafeManager)
     {
-        UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Initializing checkpoints via StrafeManager."));
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Initializing checkpoints via StrafeManager."));
         CurrentStrafeManager->RefreshAndInitializeCheckpoints();
     }
     else
     {
-        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode: StrafeManager is NULL when trying to initialize checkpoints!"));
+        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode: StrafeManager is NULL when trying to initialize checkpoints! Attempting to create one..."));
+
+        // Try to spawn again as a fallback
+        SpawnStrafeManager();
+
+        if (CurrentStrafeManager)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Successfully created StrafeManager on second attempt. Initializing checkpoints."));
+            CurrentStrafeManager->RefreshAndInitializeCheckpoints();
+
+            // Also update the GameState
+            AS_StrafeGameState* StrafeGS = GetStrafeGameState();
+            if (StrafeGS)
+            {
+                StrafeGS->SetStrafeManager(CurrentStrafeManager);
+            }
+        }
+        else
+        {
+            UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode: CRITICAL ERROR - Cannot create StrafeManager! Strafe mode will not function!"));
+        }
     }
 
     if (WarmupTime > 0.f)
@@ -124,20 +175,20 @@ void AS_StrafeGameMode::HandleMatchIsWaitingToStart()
 void AS_StrafeGameMode::StartWarmupTimer()
 {
     GetWorldTimerManager().SetTimer(WarmupTimerHandle, this, &AS_StrafeGameMode::OnWarmupTimerEnd, WarmupTime, false);
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Warmup timer started for %f seconds."), WarmupTime);
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Warmup timer started for %f seconds."), WarmupTime);
 }
 
 void AS_StrafeGameMode::OnWarmupTimerEnd()
 {
     GetWorldTimerManager().ClearTimer(WarmupTimerHandle);
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Warmup ended. Starting match."));
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Warmup ended. Starting match."));
     StartMatch();
 }
 
 void AS_StrafeGameMode::HandleMatchHasStarted()
 {
     Super::HandleMatchHasStarted();
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match has started (InProgress)."));
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Match has started (InProgress)."));
 
     AS_StrafeGameState* StrafeGS = GetStrafeGameState();
     if (StrafeGS)
@@ -167,11 +218,11 @@ void AS_StrafeGameMode::StartMainMatchTimer()
     if (MatchDurationSeconds > 0)
     {
         GetWorldTimerManager().SetTimer(MatchTimerHandle, this, &AS_StrafeGameMode::UpdateMainMatchTime, 1.0f, true);
-        UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Main match timer started for %d seconds."), MatchDurationSeconds);
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Main match timer started for %d seconds."), MatchDurationSeconds);
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("AS__StrafeGameMode: No match duration set, match will run indefinitely (or until other conditions)."));
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: No match duration set, match will run indefinitely (or until other conditions)."));
     }
 }
 
@@ -186,7 +237,7 @@ void AS_StrafeGameMode::UpdateMainMatchTime()
 
         if (MatchDurationSeconds > 0 && CurrentTime <= 0)
         {
-            UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match time limit reached."));
+            UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Match time limit reached."));
             GetWorldTimerManager().ClearTimer(MatchTimerHandle);
             EndMatch();
         }
@@ -200,7 +251,7 @@ void AS_StrafeGameMode::UpdateMainMatchTime()
 void AS_StrafeGameMode::HandleMatchHasEnded()
 {
     Super::HandleMatchHasEnded();
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match has ended (WaitingPostMatch)."));
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Match has ended (WaitingPostMatch)."));
     GetWorldTimerManager().ClearTimer(MatchTimerHandle);
 
     AS_StrafeGameState* StrafeGS = GetStrafeGameState();
@@ -227,37 +278,49 @@ void AS_StrafeGameMode::HandleMatchHasEnded()
 void AS_StrafeGameMode::StartPostMatchTimer()
 {
     GetWorldTimerManager().SetTimer(PostMatchTimerHandle, this, &AS_StrafeGameMode::OnPostMatchTimerEnd, PostMatchTime, false);
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Post-match timer started for %f seconds."), PostMatchTime);
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Post-match timer started for %f seconds."), PostMatchTime);
 }
 
 void AS_StrafeGameMode::OnPostMatchTimerEnd()
 {
     GetWorldTimerManager().ClearTimer(PostMatchTimerHandle);
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Post-match ended."));
+    UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Post-match ended."));
     RestartGame();
 }
 
 void AS_StrafeGameMode::SpawnStrafeManager()
 {
-    if (HasAuthority() && StrafeManagerClass && !CurrentStrafeManager)
+    if (!HasAuthority())
     {
-        FActorSpawnParameters SpawnParams;
-        SpawnParams.Owner = this;
-        SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-        CurrentStrafeManager = GetWorld()->SpawnActor<AS_StrafeManager>(StrafeManagerClass, SpawnParams);
-
-        if (CurrentStrafeManager)
-        {
-            UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Spawned StrafeManager: %s"), *CurrentStrafeManager->GetName());
-        }
-        else
-        {
-            UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode: Failed to spawn StrafeManager from class %s."), *StrafeManagerClass->GetName());
-        }
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode::SpawnStrafeManager: Called on client. Ignoring."));
+        return;
     }
-    else if (CurrentStrafeManager)
+
+    if (CurrentStrafeManager)
     {
-        UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: StrafeManager already exists or no class specified."));
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode::SpawnStrafeManager: StrafeManager already exists."));
+        return;
+    }
+
+    if (!StrafeManagerClass)
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode::SpawnStrafeManager: StrafeManagerClass is NULL! Using default AS_StrafeManager class."));
+        StrafeManagerClass = AS_StrafeManager::StaticClass();
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+    CurrentStrafeManager = GetWorld()->SpawnActor<AS_StrafeManager>(StrafeManagerClass, SpawnParams);
+
+    if (CurrentStrafeManager)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("AS_StrafeGameMode: Successfully spawned StrafeManager: %s"), *CurrentStrafeManager->GetName());
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode: Failed to spawn StrafeManager from class %s!"), *StrafeManagerClass->GetName());
     }
 }
 

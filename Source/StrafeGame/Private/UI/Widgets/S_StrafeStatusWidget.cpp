@@ -23,6 +23,9 @@ static FText FormatSplitDelta(float Delta)
 
 void US_StrafeStatusWidget::SetViewModel(US_StrafeHUDViewModel* InViewModel)
 {
+    UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::SetViewModel called with VM: %s"),
+        InViewModel ? *InViewModel->GetName() : TEXT("NULL"));
+
     if (StrafeHUDViewModel)
     {
         StrafeHUDViewModel->OnGameModeViewModelUpdated.RemoveDynamic(this, &US_StrafeStatusWidget::HandleViewModelUpdated);
@@ -32,13 +35,21 @@ void US_StrafeStatusWidget::SetViewModel(US_StrafeHUDViewModel* InViewModel)
     {
         StrafeHUDViewModel->OnGameModeViewModelUpdated.AddUniqueDynamic(this, &US_StrafeStatusWidget::HandleViewModelUpdated);
         RefreshWidget();
+
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::SetViewModel - Bound to ViewModel updates"));
     }
 }
 
 void US_StrafeStatusWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    if (StrafeHUDViewModel) RefreshWidget();
+
+    UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::NativeConstruct - Widget: %s"), *GetName());
+
+    if (StrafeHUDViewModel)
+    {
+        RefreshWidget();
+    }
 }
 
 void US_StrafeStatusWidget::NativeDestruct()
@@ -52,22 +63,41 @@ void US_StrafeStatusWidget::NativeDestruct()
 
 void US_StrafeStatusWidget::HandleViewModelUpdated()
 {
-    UE_LOG(LogTemp, Verbose, TEXT("[STRAFE DEBUG] StrafeStatusWidget: ViewModel updated, refreshing display."));
+    UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::HandleViewModelUpdated - Refreshing widget"));
     RefreshWidget();
 }
 
 void US_StrafeStatusWidget::RefreshWidget()
 {
-    if (!StrafeHUDViewModel) return;
+    if (!StrafeHUDViewModel)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::RefreshWidget - No ViewModel!"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::RefreshWidget - Time: %.2f, Checkpoint: %d/%d"),
+        StrafeHUDViewModel->CurrentRaceTime,
+        StrafeHUDViewModel->CurrentCheckpoint + 1,
+        StrafeHUDViewModel->TotalCheckpoints);
 
     if (TxtCurrentTime)
     {
         TxtCurrentTime->SetText(FormatRaceTime(StrafeHUDViewModel->CurrentRaceTime));
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::RefreshWidget - TxtCurrentTime is NULL!"));
+    }
+
     if (TxtBestTime)
     {
         TxtBestTime->SetText(FormatRaceTime(StrafeHUDViewModel->BestRaceTime.TotalTime));
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::RefreshWidget - TxtBestTime is NULL!"));
+    }
+
     if (TxtCheckpoints)
     {
         FText CPText = FText::Format(NSLOCTEXT("StrafeStatus", "CheckpointsFmt", "CP: {0}/{1}"),
@@ -76,6 +106,11 @@ void US_StrafeStatusWidget::RefreshWidget()
         );
         TxtCheckpoints->SetText(CPText);
     }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::RefreshWidget - TxtCheckpoints is NULL!"));
+    }
+
     if (TxtSplits)
     {
         FString SplitsStr;
@@ -86,5 +121,9 @@ void US_StrafeStatusWidget::RefreshWidget()
             SplitsStr += FString::Printf(TEXT("CP%d: %s %s\n"), i + 1, *SplitTimeText.ToString(), *DeltaText.ToString());
         }
         TxtSplits->SetText(FText::FromString(SplitsStr));
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("US_StrafeStatusWidget::RefreshWidget - TxtSplits is NULL!"));
     }
 }
