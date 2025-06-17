@@ -418,27 +418,17 @@ void AS_Character::Input_Look(const FInputActionValue& InputActionValue)
 
 void AS_Character::Input_Jump(const FInputActionValue& InputActionValue)
 {
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_Jump: %s"), *GetNameSafe(this));
-    UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
-    if (ASC)
-    {
-        Super::Jump();
-    }
-    else {
-        Super::Jump();
-    }
+    Super::Jump();
 }
 
 void AS_Character::Input_StopJumping(const FInputActionValue& InputActionValue)
 {
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_StopJumping: %s"), *GetNameSafe(this));
     Super::StopJumping();
 }
 
 void AS_Character::Input_PrimaryAbility_Pressed(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_PrimaryAbility_Pressed: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentPrimaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentPrimaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputPressed(CurrentPrimaryAbilityInputID);
@@ -448,7 +438,6 @@ void AS_Character::Input_PrimaryAbility_Pressed(const FInputActionValue& InputAc
 void AS_Character::Input_PrimaryAbility_Released(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_PrimaryAbility_Released: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentPrimaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentPrimaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputReleased(CurrentPrimaryAbilityInputID);
@@ -458,7 +447,6 @@ void AS_Character::Input_PrimaryAbility_Released(const FInputActionValue& InputA
 void AS_Character::Input_SecondaryAbility_Pressed(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_SecondaryAbility_Pressed: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentSecondaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentSecondaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputPressed(CurrentSecondaryAbilityInputID);
@@ -468,7 +456,6 @@ void AS_Character::Input_SecondaryAbility_Pressed(const FInputActionValue& Input
 void AS_Character::Input_SecondaryAbility_Released(const FInputActionValue& InputActionValue)
 {
     UAbilitySystemComponent* ASC = GetPlayerAbilitySystemComponent();
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_SecondaryAbility_Released: %s - InputID: %d. ASC Valid: %d"), *GetNameSafe(this), CurrentSecondaryAbilityInputID, ASC != nullptr);
     if (ASC && CurrentSecondaryAbilityInputID != INDEX_NONE)
     {
         ASC->AbilityLocalInputReleased(CurrentSecondaryAbilityInputID);
@@ -477,24 +464,20 @@ void AS_Character::Input_SecondaryAbility_Released(const FInputActionValue& Inpu
 
 void AS_Character::Input_NextWeapon(const FInputActionValue& InputActionValue)
 {
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_NextWeapon: %s. Inventory Valid: %d"), *GetNameSafe(this), WeaponInventoryComponent != nullptr);
     if (WeaponInventoryComponent) WeaponInventoryComponent->ServerRequestNextWeapon();
 }
 
 void AS_Character::Input_PreviousWeapon(const FInputActionValue& InputActionValue)
 {
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_PreviousWeapon: %s. Inventory Valid: %d"), *GetNameSafe(this), WeaponInventoryComponent != nullptr);
     if (WeaponInventoryComponent) WeaponInventoryComponent->ServerRequestPreviousWeapon();
 }
 
 void AS_Character::Input_ToggleCameraView(const FInputActionValue& InputActionValue)
 {
-    UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_ToggleCameraView: %s. Current FP: %d"), *GetNameSafe(this), bIsFirstPersonView);
     if (IsLocallyControlled())
     {
         bIsFirstPersonView = !bIsFirstPersonView;
         RefreshActiveMeshesAndWeaponAttachment();
-        UE_LOG(LogTemp, Log, TEXT("AS_Character::Input_ToggleCameraView: Toggled to FP: %d"), bIsFirstPersonView);
     }
 }
 

@@ -72,6 +72,9 @@ void US_UI_AssetManager::OnScreenMapDataAssetLoaded(FSoftObjectPath ScreenDataAs
     AssetsToLoad.Add(UISettings->GameplaySettingsTabClass.ToSoftObjectPath());
     AssetsToLoad.Add(UISettings->PlayerSettingsTabClass.ToSoftObjectPath());
 
+    // --- FIX: ADD PAUSE MENU WIDGET TO ASSET LOADING ---
+    AssetsToLoad.Add(UISettings->PauseMenuWidgetClass.ToSoftObjectPath());
+    // --- END FIX ---
 
     for (const F_UIScreenDefinition& Definition : ScreenData->ScreenDefinitions)
     {

@@ -28,6 +28,10 @@ public:
     /** Server function to set the StrafeManager. Called by StrafeGameMode. */
     void SetStrafeManager(AS_StrafeManager* InStrafeManager);
 
+    /** Safe getter for Blueprints to access the Strafe Manager. */
+    UFUNCTION(BlueprintPure, Category = "StrafeGameState")
+    AS_StrafeManager* GetStrafeManager() const { return StrafeManager; };
+
     /** Match duration for the current Strafe match (main play phase). Replicated from GameMode settings. */
     UPROPERTY(BlueprintReadOnly, Replicated, Category = "StrafeGameState|Rules")
     int32 MatchDurationSeconds;

@@ -23,19 +23,21 @@ void AS_StrafeGameMode::StartPlay()
 {
     Super::StartPlay();
 
-    // This is the reliable point to find all actors and set up bindings.
-    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode::StartPlay: Spawning and initializing StrafeManager."));
+    UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode::StartPlay: Spawning StrafeManager."));
     SpawnStrafeManager();
-    if (CurrentStrafeManager)
+
+    AS_StrafeGameState* StrafeGS = GetStrafeGameState();
+    if (CurrentStrafeManager && StrafeGS)
     {
-        CurrentStrafeManager->RefreshAndInitializeCheckpoints();
+        StrafeGS->SetStrafeManager(CurrentStrafeManager);
+        // FIX: Initialization is moved to HandleMatchIsWaitingToStart to ensure all level actors are ready.
+        // CurrentStrafeManager->RefreshAndInitializeCheckpoints();
     }
 }
 
 void AS_StrafeGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
 {
     Super::InitGame(MapName, Options, ErrorMessage);
-    // Spawning logic moved to StartPlay to ensure all actors are ready.
 }
 
 void AS_StrafeGameMode::InitGameState()
@@ -44,7 +46,6 @@ void AS_StrafeGameMode::InitGameState()
     AS_StrafeGameState* StrafeGS = GetStrafeGameState();
     if (StrafeGS)
     {
-        StrafeGS->SetStrafeManager(CurrentStrafeManager);
         StrafeGS->MatchDurationSeconds = MatchDurationSeconds;
     }
 }
@@ -92,7 +93,17 @@ void AS_StrafeGameMode::HandleMatchIsWaitingToStart()
     Super::HandleMatchIsWaitingToStart();
     UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Match is WaitingToStart."));
 
-    // Checkpoint initialization has been moved to StartPlay for reliability.
+    // FIX: Initialize the checkpoint system here. This is a more reliable point in the lifecycle
+    // as it ensures all actors in the level have been through their BeginPlay calls.
+    if (CurrentStrafeManager)
+    {
+        UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: Initializing checkpoints via StrafeManager."));
+        CurrentStrafeManager->RefreshAndInitializeCheckpoints();
+    }
+    else
+    {
+        UE_LOG(LogTemp, Error, TEXT("AS_StrafeGameMode: StrafeManager is NULL when trying to initialize checkpoints!"));
+    }
 
     if (WarmupTime > 0.f)
     {
@@ -160,7 +171,7 @@ void AS_StrafeGameMode::StartMainMatchTimer()
     }
     else
     {
-        UE_LOG(LogTemp, Log, TEXT("AS_StrafeGameMode: No match duration set, match will run indefinitely (or until other conditions)."));
+        UE_LOG(LogTemp, Log, TEXT("AS__StrafeGameMode: No match duration set, match will run indefinitely (or until other conditions)."));
     }
 }
 

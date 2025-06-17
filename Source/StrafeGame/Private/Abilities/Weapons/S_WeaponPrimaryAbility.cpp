@@ -72,7 +72,6 @@ bool US_WeaponPrimaryAbility::CanActivateAbility(const FGameplayAbilitySpecHandl
 
 void US_WeaponPrimaryAbility::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
-    UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s (%s) - Handle: %s"), *GetClass()->GetName(), *GetNameSafe(this), *Handle.ToString());
     CurrentEventData = TriggerEventData;
 
     // Call UGameplayAbility's ActivateAbility. This is important for BP K2_ActivateAbility etc.
@@ -84,7 +83,6 @@ void US_WeaponPrimaryAbility::ActivateAbility(const FGameplayAbilitySpecHandle H
     {
         if (CommitAbility(Handle, ActorInfo, ActivationInfo))
         {
-            UE_LOG(LogTemp, Log, TEXT("US_WeaponPrimaryAbility::ActivateAbility: %s (%s) - Committed. Calling PerformWeaponFire."), *GetClass()->GetName(), *GetNameSafe(this));
             // PerformWeaponFire is virtual, so the most derived version will be called
             // (e.g., US_ChargedShotgunPrimaryAbility::PerformWeaponFire if this is an instance of that)
             PerformWeaponFire(Handle, ActorInfo, ActivationInfo);
